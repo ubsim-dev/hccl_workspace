@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""Generate an ns-3-ub case for HCCL AlltoAllV Mesh1D AICPU scheduling.
+
+The script copies topology/routing/network files from an existing case,
+filters transport_channel.csv to participating ranks, and generates traffic.csv
+using the Mesh1D baseline schedule:
+
+  - each rank talks to up to 4 peers per phase
+  - peers are selected symmetrically around the rank
+  - each rank-peer flow is one URMA_WRITE task
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import shutil
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SOURCE_CASE = REPO_ROOT / "generated_topology"
+COPY_FILES = (
+    "node.csv",
+    "topology.csv",
+    "routing_table.csv",
+    "network_attribute.txt",
+)
+TRAFFIC_HEADER = [
+    "taskId",
+    "sourceNodeId",
+    "destNodeId",
+    "dataSize(Byte)",
+    "opType",
+    "priority",
+    "delay",
+    "phaseId",
+    "dependOnPhases",
+]
+
+
+def parse_size(value: str) -> int:
+    text = value.strip()
+    units = {
+        "B": 1,
+        "K": 1024,
+        "KB": 1024,
+        "M": 1024**2,
+        "MB": 1024**2,
+        "G": 1024**3,
+        "GB": 1024**3,
+    }
+    upper = text.upper()
+    for unit in sorted(units, key=len, reverse=True):
+        if upper.endswith(unit):
+            number = upper[: -len(unit)].strip()
+            return int(float(number) * units[unit])
+    return int(text)
+
+
+def format_size_for_name(size_bytes: int) -> str:
+    for suffix, scale in (("gb", 1024**3), ("mb", 1024**2), ("kb", 1024)):
+        if size_bytes % scale == 0:
+            return f"{size_bytes // scale}{suffix}"
+    return f"{size_bytes}b"
+
+
+def mesh1d_phase_peers(rank: int, rank_count: int, phase: int, concurrent: int) -> list[int]:
+    pair_num_per_round = (concurrent + 1) // 2
+    total_prev = 0
+    for prev_phase in range(phase):
+        remain = rank_count - 1 - total_prev
+        pair_size = (remain + 1) // 2 if remain < concurrent else pair_num_per_round
+        count = 0
+        for distance in range(
+            prev_phase * pair_num_per_round + 1,
+            prev_phase * pair_num_per_round + pair_size + 1,
+        ):
+            left = (rank + rank_count - distance) % rank_count
+            right = (rank + distance) % rank_count
+            count += 1 if left == right else 2
+        total_prev += count
+
+    remain = rank_count - 1 - total_prev
+    pair_size = (remain + 1) // 2 if remain < concurrent else pair_num_per_round
+    peers: list[int] = []
+    for distance in range(
+        phase * pair_num_per_round + 1,
+        phase * pair_num_per_round + pair_size + 1,
+    ):
+        left = (rank + rank_count - distance) % rank_count
+        right = (rank + distance) % rank_count
+        if left == right:
+            peers.append(left)
+            break
+        peers.extend((left, right))
+    return peers
+
+
+def mesh1d_phase_count(rank_count: int) -> int:
+    concurrent = min(4, rank_count - 1)
+    return (rank_count - 2 + concurrent) // concurrent
+
+
+def write_traffic(
+    output_path: Path,
+    rank_ids: list[int],
+    per_rank_bytes: int,
+    priority: int,
+    phase_delay: str,
+) -> tuple[int, int, int, int]:
+    rank_count = len(rank_ids)
+    if rank_count < 2:
+        raise ValueError("rank-count must be at least 2")
+    per_peer_base = per_rank_bytes // (rank_count - 1)
+    per_peer_remainder = per_rank_bytes % (rank_count - 1)
+    concurrent = min(4, rank_count - 1)
+    phase_count = mesh1d_phase_count(rank_count)
+
+    task_id = 0
+    with output_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=TRAFFIC_HEADER)
+        writer.writeheader()
+        for phase in range(phase_count):
+            depend = "" if phase == 0 else str(phase - 1)
+            for alg_rank, src_node in enumerate(rank_ids):
+                peer_offset_in_rank = 0
+                for prev_phase in range(phase):
+                    peer_offset_in_rank += len(mesh1d_phase_peers(alg_rank, rank_count, prev_phase, concurrent))
+                for peer_idx, peer_alg_rank in enumerate(mesh1d_phase_peers(alg_rank, rank_count, phase, concurrent)):
+                    data_size = per_peer_base + int(peer_offset_in_rank + peer_idx < per_peer_remainder)
+                    writer.writerow(
+                        {
+                            "taskId": task_id,
+                            "sourceNodeId": src_node,
+                            "destNodeId": rank_ids[peer_alg_rank],
+                            "dataSize(Byte)": data_size,
+                            "opType": "URMA_WRITE",
+                            "priority": priority,
+                            "delay": phase_delay,
+                            "phaseId": phase,
+                            "dependOnPhases": depend,
+                        }
+                    )
+                    task_id += 1
+    return task_id, phase_count, per_peer_base, per_peer_base + int(per_peer_remainder > 0)
+
+
+def copy_case_files(source_case: Path, output_case: Path) -> None:
+    output_case.mkdir(parents=True, exist_ok=True)
+    for filename in COPY_FILES:
+        src = source_case / filename
+        if not src.exists():
+            raise FileNotFoundError(src)
+        shutil.copy2(src, output_case / filename)
+
+
+def filter_transport_channels(source_csv: Path, output_csv: Path, rank_ids: set[int], priority: int) -> int:
+    if not source_csv.exists():
+        raise FileNotFoundError(source_csv)
+    rows = 0
+    with source_csv.open(newline="") as src_f, output_csv.open("w", newline="") as dst_f:
+        reader = csv.DictReader(src_f)
+        if reader.fieldnames is None:
+            raise ValueError(f"{source_csv} has no header")
+        writer = csv.DictWriter(dst_f, fieldnames=reader.fieldnames)
+        writer.writeheader()
+        for row in reader:
+            if (
+                int(row["nodeId1"]) in rank_ids
+                and int(row["nodeId2"]) in rank_ids
+                and int(row["priority"]) == priority
+            ):
+                writer.writerow(row)
+                rows += 1
+    if rows == 0:
+        raise ValueError(f"no transport channels matched rank set and priority {priority}")
+    return rows
+
+
+def patch_network_attributes(path: Path, enable_port_trace: bool, disable_packet_trace: bool) -> None:
+    lines = path.read_text().splitlines()
+    patched: list[str] = []
+    seen_port = False
+    seen_packet = False
+    for line in lines:
+        if line.startswith('global UB_PORT_TRACE_ENABLE '):
+            patched.append(f'global UB_PORT_TRACE_ENABLE "{str(enable_port_trace).lower()}"')
+            seen_port = True
+        elif line.startswith('global UB_RECORD_PKT_TRACE ') and disable_packet_trace:
+            patched.append('global UB_RECORD_PKT_TRACE "false"')
+            seen_packet = True
+        else:
+            patched.append(line)
+    if not seen_port:
+        patched.append(f'global UB_PORT_TRACE_ENABLE "{str(enable_port_trace).lower()}"')
+    if disable_packet_trace and not seen_packet:
+        patched.append('global UB_RECORD_PKT_TRACE "false"')
+    path.write_text("\n".join(patched) + "\n")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("-s", "--source-case", type=Path, default=DEFAULT_SOURCE_CASE)
+    parser.add_argument("-o", "--output-case", type=Path)
+    parser.add_argument("-n", "--rank-count", type=int, required=True)
+    parser.add_argument("--rank-start", type=int, default=0)
+    parser.add_argument("-b", "--per-rank-bytes", required=True, help="Examples: 256MB, 1GB, 16777216")
+    parser.add_argument("--priority", type=int, default=7)
+    parser.add_argument("--phase-delay", default="0ns")
+    parser.add_argument("--disable-packet-trace", action="store_true", default=True)
+    parser.add_argument("--no-port-trace", action="store_true")
+    args = parser.parse_args()
+
+    source_case = args.source_case.resolve()
+    per_rank_bytes = parse_size(args.per_rank_bytes)
+    rank_ids = list(range(args.rank_start, args.rank_start + args.rank_count))
+    output_case = args.output_case
+    if output_case is None:
+        size_name = format_size_for_name(per_rank_bytes)
+        output_case = REPO_ROOT / f"generated_topology_hccl_mesh1d_a2av{args.rank_count}_{size_name}"
+    output_case = output_case.resolve()
+
+    copy_case_files(source_case, output_case)
+    tp_rows = filter_transport_channels(
+        source_case / "transport_channel.csv",
+        output_case / "transport_channel.csv",
+        set(rank_ids),
+        args.priority,
+    )
+    task_count, phase_count, per_peer_min_bytes, per_peer_max_bytes = write_traffic(
+        output_case / "traffic.csv",
+        rank_ids,
+        per_rank_bytes,
+        args.priority,
+        args.phase_delay,
+    )
+    patch_network_attributes(
+        output_case / "network_attribute.txt",
+        enable_port_trace=not args.no_port_trace,
+        disable_packet_trace=args.disable_packet_trace,
+    )
+
+    print(f"output_case={output_case}")
+    print(f"rank_ids={rank_ids[0]}..{rank_ids[-1]} rank_count={len(rank_ids)}")
+    print(
+        f"per_rank_bytes={per_rank_bytes} "
+        f"per_peer_bytes={per_peer_min_bytes}..{per_peer_max_bytes}"
+    )
+    print(f"phases={phase_count} tasks={task_count} transport_channel_rows={tp_rows}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
