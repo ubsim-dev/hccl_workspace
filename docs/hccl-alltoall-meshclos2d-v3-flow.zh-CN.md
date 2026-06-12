@@ -91,6 +91,27 @@ ideal:
   每个 pair 保留全部 TP
 ```
 
+traffic 调度：
+
+```text
+所有 rank-pair flow 放在 1 个 phase。
+```
+
+原因：
+
+```text
+V3 executor 只有一个 stage：
+  PreSyncInterThreads(...)
+  intra.KernelRun(...)
+  inter.KernelRun(...)
+  PostSyncInterThreads(...)
+
+MeshClosV3 内部虽然有 for step / for linkIdx，但目前没有证据表明 step 是全局 barrier。
+因此 ns-3 不应默认用 phase 强行串行化这些 step。
+```
+
+早期把源码 step 当作 ns-3 phase barrier 的建模不再使用。
+
 traffic：
 
 ```text
@@ -125,3 +146,17 @@ V3 ideal: 424.93 GB/s
 
 结论：V3 修复了 V2 跨组大流单 TP 的问题，但组内 `Mesh2DV3` 仍然固定 `channels[0]`。
 因此 strict 版只提升到 90GB/s 左右；真正接近拓扑上限需要组内也能多 TP 分散。
+
+## 16 Rank 16MiB 校验
+
+为了确认单 phase strict/ideal 的差距，补充 16MiB/rank、关闭 port trace 的小规模验证。
+
+| 模型 | Phases | Tasks | Makespan(us) | Direct GB/s |
+| --- | ---: | ---: | ---: | ---: |
+| V3 strict | 1 | 240 | 93.744 | 178.97 |
+| V3 ideal | 1 | 240 | 47.727 | 351.53 |
+
+观察：
+
+- strict 下，单条跨组 pair 被限制到源码选择的单个平面，单流上限约等于单平面带宽。
+- ideal 下，每个 pair 保留全部 TP，用作拓扑上界参考。

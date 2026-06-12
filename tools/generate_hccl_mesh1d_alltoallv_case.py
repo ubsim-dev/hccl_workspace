@@ -5,7 +5,7 @@ The script copies topology/routing/network files from an existing case,
 filters transport_channel.csv to participating ranks, and generates traffic.csv
 using the Mesh1D baseline schedule:
 
-  - each rank talks to up to 4 peers per phase
+  - each rank talks to up to 4 peers per round
   - peers are selected symmetrically around the rank
   - each rank-peer flow is one URMA_WRITE task
 """
@@ -108,6 +108,7 @@ def write_traffic(
     per_rank_bytes: int,
     priority: int,
     phase_delay: str,
+    dependency_mode: str,
 ) -> tuple[int, int, int, int]:
     rank_count = len(rank_ids)
     if rank_count < 2:
@@ -118,17 +119,33 @@ def write_traffic(
     phase_count = mesh1d_phase_count(rank_count)
 
     task_id = 0
+    phases: set[int] = set()
+    last_task_by_unit: dict[tuple[int, int], int] = {}
     with output_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=TRAFFIC_HEADER)
         writer.writeheader()
         for phase in range(phase_count):
-            depend = "" if phase == 0 else str(phase - 1)
             for alg_rank, src_node in enumerate(rank_ids):
                 peer_offset_in_rank = 0
                 for prev_phase in range(phase):
                     peer_offset_in_rank += len(mesh1d_phase_peers(alg_rank, rank_count, prev_phase, concurrent))
                 for peer_idx, peer_alg_rank in enumerate(mesh1d_phase_peers(alg_rank, rank_count, phase, concurrent)):
                     data_size = per_peer_base + int(peer_offset_in_rank + peer_idx < per_peer_remainder)
+                    if dependency_mode == "phase-barrier":
+                        phase_id = phase
+                        depend = "" if phase == 0 else str(phase - 1)
+                    elif dependency_mode == "thread-serial":
+                        phase_id = task_id
+                        unit = (alg_rank, peer_idx)
+                        previous = last_task_by_unit.get(unit)
+                        depend = "" if previous is None else str(previous)
+                        last_task_by_unit[unit] = task_id
+                    elif dependency_mode == "none":
+                        phase_id = 0
+                        depend = ""
+                    else:
+                        raise ValueError(f"unknown dependency_mode {dependency_mode}")
+                    phases.add(phase_id)
                     writer.writerow(
                         {
                             "taskId": task_id,
@@ -138,12 +155,12 @@ def write_traffic(
                             "opType": "URMA_WRITE",
                             "priority": priority,
                             "delay": phase_delay,
-                            "phaseId": phase,
+                            "phaseId": phase_id,
                             "dependOnPhases": depend,
                         }
                     )
                     task_id += 1
-    return task_id, phase_count, per_peer_base, per_peer_base + int(per_peer_remainder > 0)
+    return task_id, len(phases), per_peer_base, per_peer_base + int(per_peer_remainder > 0)
 
 
 def copy_case_files(source_case: Path, output_case: Path) -> None:
@@ -208,6 +225,14 @@ def main() -> int:
     parser.add_argument("-b", "--per-rank-bytes", required=True, help="Examples: 256MB, 1GB, 16777216")
     parser.add_argument("--priority", type=int, default=7)
     parser.add_argument("--phase-delay", default="0ns")
+    parser.add_argument(
+        "--dependency-mode",
+        choices=("thread-serial", "phase-barrier", "none"),
+        default="thread-serial",
+        help="thread-serial chains the same source's Mesh1D peer slot across rounds, "
+        "matching thread-queue ordering without a global round barrier. "
+        "phase-barrier keeps the older conservative model.",
+    )
     parser.add_argument("--disable-packet-trace", action="store_true", default=True)
     parser.add_argument("--no-port-trace", action="store_true")
     args = parser.parse_args()
@@ -234,6 +259,7 @@ def main() -> int:
         per_rank_bytes,
         args.priority,
         args.phase_delay,
+        args.dependency_mode,
     )
     patch_network_attributes(
         output_case / "network_attribute.txt",
@@ -247,7 +273,7 @@ def main() -> int:
         f"per_rank_bytes={per_rank_bytes} "
         f"per_peer_bytes={per_peer_min_bytes}..{per_peer_max_bytes}"
     )
-    print(f"phases={phase_count} tasks={task_count} transport_channel_rows={tp_rows}")
+    print(f"dependency_mode={args.dependency_mode} phases={phase_count} tasks={task_count} transport_channel_rows={tp_rows}")
     return 0
 
 

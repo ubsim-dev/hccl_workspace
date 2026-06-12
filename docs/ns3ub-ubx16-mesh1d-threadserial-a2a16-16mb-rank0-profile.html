@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 Mesh1D baseline thread-serial A2A16 16MiB rank0 profile</title>
+  <style>
+    body { margin: 0; background: #f6f7f9; color: #1f2937; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(1220px, calc(100% - 32px)); margin: 24px auto 42px; }
+    h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: 0; }
+    .muted { color: #667085; margin: 0 0 16px; }
+    .panel { background: white; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; overflow-x: auto; }
+    svg { min-width: 1180px; }
+    .grid { stroke: #e4e8ef; stroke-width: 1; }
+    .tick, .row-meta { fill: #667085; font-size: 12px; }
+    .row-label { fill: #1f2937; font-size: 13px; font-weight: 650; }
+    .row-bg { fill: #fbfcfe; }
+    .bar { stroke: rgba(31,41,55,.25); stroke-width: .6; }
+    .phase0 { fill: #2563eb; }
+    .phase1 { fill: #0f766e; }
+    .phase2 { fill: #b42318; }
+    .phase3 { fill: #7c3aed; }
+    .bar-label { fill: white; font-size: 11px; pointer-events: none; }
+    code { background: #eef2f7; padding: 1px 5px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>UBX16 Mesh1D baseline thread-serial A2A16 16MiB rank0 profile</h1>
+  <p class="muted">case: <code>generated_topology_ubx16_hccl_mesh1d_threadserial_a2a16_16mb</code> | rank 0 | tasks 15 | makespan 88.785us | direct 188.96 GB/s</p>
+  <div class="panel">
+    <svg width="1180" height="310" role="img" aria-label="Mesh1D rank profile">
+      <line class="grid" x1="176.00" y1="58" x2="176.00" y2="262" /><text class="tick" x="176.00" y="50" text-anchor="middle">0.0us</text><line class="grid" x1="298.00" y1="58" x2="298.00" y2="262" /><text class="tick" x="298.00" y="50" text-anchor="middle">11.1us</text><line class="grid" x1="420.00" y1="58" x2="420.00" y2="262" /><text class="tick" x="420.00" y="50" text-anchor="middle">22.2us</text><line class="grid" x1="542.00" y1="58" x2="542.00" y2="262" /><text class="tick" x="542.00" y="50" text-anchor="middle">33.3us</text><line class="grid" x1="664.00" y1="58" x2="664.00" y2="262" /><text class="tick" x="664.00" y="50" text-anchor="middle">44.4us</text><line class="grid" x1="786.00" y1="58" x2="786.00" y2="262" /><text class="tick" x="786.00" y="50" text-anchor="middle">55.5us</text><line class="grid" x1="908.00" y1="58" x2="908.00" y2="262" /><text class="tick" x="908.00" y="50" text-anchor="middle">66.6us</text><line class="grid" x1="1030.00" y1="58" x2="1030.00" y2="262" /><text class="tick" x="1030.00" y="50" text-anchor="middle">77.7us</text><line class="grid" x1="1152.00" y1="58" x2="1152.00" y2="262" /><text class="tick" x="1152.00" y="50" text-anchor="middle">88.8us</text>
+      <rect class="row-bg" x="0" y="83.00" width="1180" height="30.00" /><text class="row-label" x="16" y="102.00">mesh1d-thread[0]</text><text class="row-meta" x="130" y="102.00">4 task</text><g><title>task 0 0-&gt;15 phase 0\n0.000us - 15.479us\n1118482 B, 578.1 Gbps</title><rect class="bar phase0" x="176.00" y="91.00" width="170.15" height="18" rx="3" /><text class="bar-label" x="181.00" y="104.00">0: 0-&gt;15</text></g><g><title>task 64 0-&gt;13 phase 64\n15.479us - 41.326us\n1118481 B, 346.2 Gbps</title><rect class="bar phase0" x="346.15" y="91.00" width="284.14" height="18" rx="3" /><text class="bar-label" x="351.15" y="104.00">64: 0-&gt;13</text></g><g><title>task 128 0-&gt;11 phase 128\n41.326us - 61.065us\n1118481 B, 453.3 Gbps</title><rect class="bar phase0" x="630.29" y="91.00" width="216.98" height="18" rx="3" /><text class="bar-label" x="635.29" y="104.00">128: 0-&gt;11</text></g><g><title>task 192 0-&gt;9 phase 192\n61.065us - 83.507us\n1118481 B, 398.7 Gbps</title><rect class="bar phase0" x="847.28" y="91.00" width="246.70" height="18" rx="3" /><text class="bar-label" x="852.28" y="104.00">192: 0-&gt;9</text></g><rect class="row-bg" x="0" y="121.00" width="1180" height="30.00" /><text class="row-label" x="16" y="140.00">mesh1d-thread[1]</text><text class="row-meta" x="130" y="140.00">4 task</text><g><title>task 1 0-&gt;1 phase 1\n0.000us - 23.192us\n1118481 B, 385.8 Gbps</title><rect class="bar phase1" x="176.00" y="129.00" width="254.95" height="18" rx="3" /><text class="bar-label" x="181.00" y="142.00">1: 0-&gt;1</text></g><g><title>task 65 0-&gt;3 phase 65\n23.192us - 46.385us\n1118481 B, 385.8 Gbps</title><rect class="bar phase1" x="430.95" y="129.00" width="254.96" height="18" rx="3" /><text class="bar-label" x="435.95" y="142.00">65: 0-&gt;3</text></g><g><title>task 129 0-&gt;5 phase 129\n46.385us - 66.596us\n1118481 B, 442.7 Gbps</title><rect class="bar phase1" x="685.90" y="129.00" width="222.17" height="18" rx="3" /><text class="bar-label" x="690.90" y="142.00">129: 0-&gt;5</text></g><g><title>task 193 0-&gt;7 phase 193\n66.596us - 88.785us\n1118481 B, 403.2 Gbps</title><rect class="bar phase1" x="908.08" y="129.00" width="243.92" height="18" rx="3" /><text class="bar-label" x="913.08" y="142.00">193: 0-&gt;7</text></g><rect class="row-bg" x="0" y="159.00" width="1180" height="30.00" /><text class="row-label" x="16" y="178.00">mesh1d-thread[2]</text><text class="row-meta" x="130" y="178.00">4 task</text><g><title>task 2 0-&gt;14 phase 2\n0.000us - 13.617us\n1118481 B, 657.1 Gbps</title><rect class="bar phase2" x="176.00" y="167.00" width="149.69" height="18" rx="3" /><text class="bar-label" x="181.00" y="180.00">2: 0-&gt;14</text></g><g><title>task 66 0-&gt;12 phase 66\n13.617us - 31.176us\n1118481 B, 509.6 Gbps</title><rect class="bar phase2" x="325.69" y="167.00" width="193.02" height="18" rx="3" /><text class="bar-label" x="330.69" y="180.00">66: 0-&gt;12</text></g><g><title>task 130 0-&gt;10 phase 130\n31.176us - 54.374us\n1118481 B, 385.7 Gbps</title><rect class="bar phase2" x="518.71" y="167.00" width="255.01" height="18" rx="3" /><text class="bar-label" x="523.71" y="180.00">130: 0-&gt;10</text></g><g><title>task 194 0-&gt;8 phase 194\n54.374us - 78.787us\n1118481 B, 366.5 Gbps</title><rect class="bar phase2" x="773.72" y="167.00" width="268.37" height="18" rx="3" /><text class="bar-label" x="778.72" y="180.00">194: 0-&gt;8</text></g><rect class="row-bg" x="0" y="197.00" width="1180" height="30.00" /><text class="row-label" x="16" y="216.00">mesh1d-thread[3]</text><text class="row-meta" x="130" y="216.00">3 task</text><g><title>task 3 0-&gt;2 phase 3\n0.000us - 23.192us\n1118481 B, 385.8 Gbps</title><rect class="bar phase3" x="176.00" y="205.00" width="254.95" height="18" rx="3" /><text class="bar-label" x="181.00" y="218.00">3: 0-&gt;2</text></g><g><title>task 67 0-&gt;4 phase 67\n23.192us - 40.234us\n1118481 B, 525.1 Gbps</title><rect class="bar phase3" x="430.95" y="205.00" width="187.33" height="18" rx="3" /><text class="bar-label" x="435.95" y="218.00">67: 0-&gt;4</text></g><g><title>task 131 0-&gt;6 phase 131\n40.234us - 61.670us\n1118481 B, 417.4 Gbps</title><rect class="bar phase3" x="618.28" y="205.00" width="235.65" height="18" rx="3" /><text class="bar-label" x="623.28" y="218.00">131: 0-&gt;6</text></g>
+    </svg>
+  </div>
+</main>
+</body>
+</html>

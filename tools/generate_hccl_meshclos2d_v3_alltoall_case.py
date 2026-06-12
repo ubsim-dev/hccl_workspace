@@ -8,6 +8,12 @@ strict:
 
 ideal:
   - same traffic, but keep all TPs for each generated pair.
+
+Traffic is emitted in V3 logical order. By default all tasks stay in one ns-3
+phase because the V3 executor has one stage and the per-link step loop is not a
+proven global barrier. Use --dependency-mode v3-thread-serial to model each
+algorithm thread/channel as a serial queue while keeping different threads
+parallel.
 """
 
 from __future__ import annotations
@@ -130,6 +136,148 @@ def write_traffic(
                 task_id += 1
                 peer_idx += 1
     return task_id, min(peer_sizes), max(peer_sizes)
+
+
+def peer_size_map(rank_count: int, direct_per_rank_bytes: int) -> dict[tuple[int, int], int]:
+    peer_sizes = split_even(direct_per_rank_bytes, rank_count - 1)
+    sizes: dict[tuple[int, int], int] = {}
+    for src_alg in range(rank_count):
+        peer_idx = 0
+        for dst_alg in range(rank_count):
+            if dst_alg == src_alg:
+                continue
+            sizes[(src_alg, dst_alg)] = peer_sizes[peer_idx]
+            peer_idx += 1
+    return sizes
+
+
+def infer_inter_channel_count(
+    source_csv: Path,
+    rank_start: int,
+    rank_count: int,
+    group_size: int,
+    priority: int,
+) -> int:
+    rows_by_pair = load_tp_rows(source_csv, priority)
+    channel_count = 0
+    for pair in generated_pairs(rank_start, rank_count):
+        a_alg = pair[0] - rank_start
+        b_alg = pair[1] - rank_start
+        if a_alg // group_size == b_alg // group_size:
+            continue
+        channel_count = max(channel_count, len(rows_by_pair.get(pair, [])))
+    if channel_count == 0:
+        raise ValueError("could not infer inter channel count from transport_channel.csv")
+    return channel_count
+
+
+def write_v3_logical_traffic(
+    output_path: Path,
+    rank_start: int,
+    rank_count: int,
+    group_size: int,
+    clos_channel_count: int,
+    direct_per_rank_bytes: int,
+    priority: int,
+    phase_delay: str,
+    dependency_mode: str,
+) -> tuple[int, int, int, int]:
+    if rank_count % group_size != 0:
+        raise ValueError("rank_count must be divisible by group_size")
+    if clos_channel_count <= 0:
+        raise ValueError("clos_channel_count must be positive")
+
+    sizes = peer_size_map(rank_count, direct_per_rank_bytes)
+    all_sizes = list(sizes.values())
+    task_id = 0
+    seen: set[tuple[int, int]] = set()
+    last_task_by_unit: dict[tuple[str, int, int], int] = {}
+    phases: set[int] = set()
+
+    def write_row(
+        writer: csv.DictWriter,
+        src_alg: int,
+        dst_alg: int,
+        unit: tuple[str, int, int],
+    ) -> None:
+        nonlocal task_id
+        key = (src_alg, dst_alg)
+        if key in seen:
+            raise ValueError(f"duplicate traffic pair {key}")
+        seen.add(key)
+        if dependency_mode == "none":
+            phase_id = 0
+            depend_on = ""
+        elif dependency_mode == "v3-thread-serial":
+            phase_id = task_id
+            previous = last_task_by_unit.get(unit)
+            depend_on = "" if previous is None else str(previous)
+            last_task_by_unit[unit] = task_id
+        else:
+            raise ValueError(f"unknown dependency_mode {dependency_mode}")
+        phases.add(phase_id)
+        writer.writerow(
+            {
+                "taskId": task_id,
+                "sourceNodeId": rank_node(rank_start, src_alg),
+                "destNodeId": rank_node(rank_start, dst_alg),
+                "dataSize(Byte)": sizes[key],
+                "opType": "URMA_WRITE",
+                "priority": priority,
+                "delay": phase_delay,
+                "phaseId": phase_id,
+                "dependOnPhases": depend_on,
+            }
+        )
+        task_id += 1
+
+    group_num = rank_count // group_size
+    color_round_num = pairwise_round_num(group_num)
+    inter_steps = 0
+    if color_round_num > 0:
+        inter_steps = (group_size * color_round_num + clos_channel_count - 1) // clos_channel_count
+
+    with output_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=TRAFFIC_HEADER)
+        writer.writeheader()
+
+        # Mesh2DV3: for each rank, connectedRank is selected by neighborIdx.
+        # Emit by neighborIdx first so taskId order reflects logical mesh units.
+        for neighbor_idx in range(group_size - 1):
+            for src_alg in range(rank_count):
+                group_base = (src_alg // group_size) * group_size
+                local_rank = src_alg % group_size
+                dst_alg = group_base + ((local_rank + 1 + neighbor_idx) % group_size)
+                write_row(writer, src_alg, dst_alg, ("mesh", src_alg, neighbor_idx))
+
+        # MeshClosV3: for step then linkIdx, each source rank maps to one peer.
+        # This is the source algorithm order, but no phase dependency is added.
+        for step in range(inter_steps):
+            for link_idx in range(clos_channel_count):
+                micro_round = step * clos_channel_count + link_idx
+                if color_round_num == 0:
+                    continue
+                shift = micro_round // color_round_num
+                color_round = micro_round % color_round_num
+                if shift >= group_size:
+                    continue
+                for src_alg in range(rank_count):
+                    my_group, my_local = divmod(src_alg, group_size)
+                    peer_group, my_group_is_left = pair_group_in_round(group_num, my_group, color_round)
+                    if peer_group == INVALID_GROUP_ID:
+                        continue
+                    if my_group_is_left:
+                        connected_local = (my_local + shift) % group_size
+                    else:
+                        connected_local = (my_local + group_size - shift % group_size) % group_size
+                    dst_alg = peer_group * group_size + connected_local
+                    write_row(writer, src_alg, dst_alg, ("clos", src_alg, link_idx))
+
+    expected = rank_count * (rank_count - 1)
+    if task_id != expected:
+        missing = expected - task_id
+        raise ValueError(f"V3 traffic wrote {task_id} tasks, expected {expected}, missing={missing}")
+    return task_id, min(all_sizes), max(all_sizes), len(phases)
 
 
 def generated_pairs(rank_start: int, rank_count: int) -> set[tuple[int, int]]:
@@ -261,6 +409,21 @@ def main() -> int:
     parser.add_argument("--group-size", type=int, default=8)
     parser.add_argument("-b", "--direct-per-rank-bytes", required=True)
     parser.add_argument("--mode", choices=("strict", "ideal"), required=True)
+    parser.add_argument(
+        "--traffic-order",
+        choices=("v3-logical", "allpair"),
+        default="v3-logical",
+        help="v3-logical emits Mesh2D neighborIdx then MeshClosV3 step/linkIdx order; "
+        "allpair emits plain source-major all-to-all.",
+    )
+    parser.add_argument(
+        "--dependency-mode",
+        choices=("none", "v3-thread-serial"),
+        default="none",
+        help="none keeps all generated V3 tasks in one runnable phase; "
+        "v3-thread-serial chains tasks on the same source algorithm thread/channel "
+        "using phaseId/dependOnPhases.",
+    )
     parser.add_argument("--priority", type=int, default=7)
     parser.add_argument("--phase-delay", default="0ns")
     parser.add_argument("--disable-packet-trace", action="store_true", default=True)
@@ -279,14 +442,37 @@ def main() -> int:
     output_case = output_case.resolve()
 
     copy_case_files(source_case, output_case)
-    task_count, peer_min, peer_max = write_traffic(
-        output_case / "traffic.csv",
-        args.rank_start,
-        args.rank_count,
-        direct_per_rank_bytes,
-        args.priority,
-        args.phase_delay,
-    )
+    if args.traffic_order == "allpair":
+        if args.dependency_mode != "none":
+            raise ValueError("--dependency-mode is only supported with --traffic-order v3-logical")
+        task_count, peer_min, peer_max = write_traffic(
+            output_case / "traffic.csv",
+            args.rank_start,
+            args.rank_count,
+            direct_per_rank_bytes,
+            args.priority,
+            args.phase_delay,
+        )
+        phase_count = 1
+    else:
+        clos_channel_count = infer_inter_channel_count(
+            source_case / "transport_channel.csv",
+            args.rank_start,
+            args.rank_count,
+            args.group_size,
+            args.priority,
+        )
+        task_count, peer_min, peer_max, phase_count = write_v3_logical_traffic(
+            output_case / "traffic.csv",
+            args.rank_start,
+            args.rank_count,
+            args.group_size,
+            clos_channel_count,
+            direct_per_rank_bytes,
+            args.priority,
+            args.phase_delay,
+            args.dependency_mode,
+        )
     tp_rows = write_transport_channels(
         source_case / "transport_channel.csv",
         output_case / "transport_channel.csv",
@@ -307,9 +493,12 @@ def main() -> int:
         f"rank_ids={args.rank_start}..{args.rank_start + args.rank_count - 1} "
         f"rank_count={args.rank_count} group_size={args.group_size}"
     )
-    print(f"mode={args.mode} direct_per_rank_bytes={direct_per_rank_bytes}")
+    print(
+        f"mode={args.mode} traffic_order={args.traffic_order} "
+        f"dependency_mode={args.dependency_mode} direct_per_rank_bytes={direct_per_rank_bytes}"
+    )
     print(f"per_peer_bytes={peer_min}..{peer_max}")
-    print(f"phases=1 tasks={task_count} transport_channel_rows={tp_rows}")
+    print(f"phases={phase_count} tasks={task_count} transport_channel_rows={tp_rows}")
     return 0
 
 
