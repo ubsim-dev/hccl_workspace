@@ -151,13 +151,21 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, rank_count: int, t
             x = left + task.start_us * x_scale
             w = max(2.0, (task.end_us - task.start_us) * x_scale)
             label_text = f"r{task.round_id} {task.task_id}: {task.src}->{task.dst}"
+            duration_us = task.end_us - task.start_us
+            gbps = task.throughput_gbps / 8
             tip = (
                 f"task {task.task_id} round {task.round_id} {task.src}->{task.dst} phase {task.phase}\\n"
                 f"{task.start_us:.3f}us - {task.end_us:.3f}us\\n"
                 f"{task.size} B, {task.throughput_gbps:.1f} Gbps"
             )
             rows.append(
-                f'<g><title>{html.escape(tip)}</title>'
+                f'<g class="task" tabindex="0" data-task-id="{task.task_id}" '
+                f'data-flow="{task.src}->{task.dst}" data-round="{task.round_id}" '
+                f'data-phase="{task.phase}" data-slot="{html.escape(label)}" '
+                f'data-start="{task.start_us:.6f} us" data-end="{task.end_us:.6f} us" '
+                f'data-duration="{duration_us:.6f} us" data-size="{task.size} B" '
+                f'data-throughput="{task.throughput_gbps:.3f} Gbps / {gbps:.3f} GB/s">'
+                f'<title>{html.escape(tip)}</title>'
                 f'<rect class="bar phase{task.round_id % 4}" x="{x:.2f}" y="{y + 3:.2f}" '
                 f'width="{w:.2f}" height="18" rx="3" />'
                 f'<text class="bar-label" x="{x + 5:.2f}" y="{y + 16:.2f}">{html.escape(label_text)}</text>'
@@ -182,12 +190,21 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, rank_count: int, t
     .row-label {{ fill: #1f2937; font-size: 13px; font-weight: 650; }}
     .row-bg {{ fill: #fbfcfe; }}
     .bar {{ stroke: rgba(31,41,55,.25); stroke-width: .6; }}
+    .task {{ cursor: pointer; outline: none; }}
+    .task:focus .bar, .task.selected .bar {{ stroke: #111827; stroke-width: 1.8; opacity: 1; }}
     .phase0 {{ fill: #2563eb; }}
     .phase1 {{ fill: #0f766e; }}
     .phase2 {{ fill: #b42318; }}
     .phase3 {{ fill: #7c3aed; }}
     .bar-label {{ fill: white; font-size: 11px; pointer-events: none; }}
+    .details {{ margin-top: 12px; background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; }}
+    .details h2 {{ margin: 0 0 10px; font-size: 16px; }}
+    .detail-grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }}
+    .detail-item {{ background: #fbfcfe; border: 1px solid #edf1f6; border-radius: 6px; padding: 8px 10px; }}
+    .detail-label {{ color: #667085; font-size: 12px; }}
+    .detail-value {{ color: #111827; font-weight: 650; font-variant-numeric: tabular-nums; }}
     code {{ background: #eef2f7; padding: 1px 5px; border-radius: 5px; }}
+    @media (max-width: 760px) {{ .detail-grid {{ grid-template-columns: 1fr 1fr; }} }}
   </style>
 </head>
 <body>
@@ -200,7 +217,45 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, rank_count: int, t
       {''.join(rows)}
     </svg>
   </div>
+  <section class="details" aria-live="polite">
+    <h2>Task detail</h2>
+    <div class="detail-grid" id="detail-grid">
+      <div class="detail-item"><div class="detail-label">选择</div><div class="detail-value">点击上方任意条形流</div></div>
+    </div>
+  </section>
 </main>
+<script>
+  const detailGrid = document.getElementById('detail-grid');
+  const fields = [
+    ['taskId', 'Task'],
+    ['flow', 'Flow'],
+    ['slot', 'Slot'],
+    ['round', 'Round'],
+    ['phase', 'Phase'],
+    ['start', 'Start'],
+    ['end', 'End'],
+    ['duration', 'Duration'],
+    ['size', 'Data'],
+    ['throughput', 'Throughput'],
+  ];
+  function selectTask(node) {{
+    document.querySelectorAll('.task.selected').forEach((el) => el.classList.remove('selected'));
+    node.classList.add('selected');
+    detailGrid.innerHTML = fields.map(([key, label]) => {{
+      const value = node.dataset[key] || '-';
+      return `<div class="detail-item"><div class="detail-label">${{label}}</div><div class="detail-value">${{value}}</div></div>`;
+    }}).join('');
+  }}
+  document.querySelectorAll('.task').forEach((node) => {{
+    node.addEventListener('click', () => selectTask(node));
+    node.addEventListener('keydown', (event) => {{
+      if (event.key === 'Enter' || event.key === ' ') {{
+        event.preventDefault();
+        selectTask(node);
+      }}
+    }});
+  }});
+</script>
 </body>
 </html>
 """

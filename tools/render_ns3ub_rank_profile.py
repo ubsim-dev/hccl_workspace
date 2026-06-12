@@ -225,17 +225,26 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
             bar_y = row_y + 3 + sublane * sublane_h
             cls = "bar mesh" if task.unit_kind == "mesh" else "bar clos"
             label_x = x + 4
+            slot_label = f"{task.unit_kind}-thread[{task.unit_idx}]"
+            duration_us = task.end_us - task.start_us
+            gbps = task.throughput_gbps / 8
             tooltip = (
                 f"task {task.task_id}: {task.src}->{task.dst}\\n"
                 f"{task.start_us:.3f}us - {task.end_us:.3f}us\\n"
                 f"{task.size} bytes\\n"
-                f"{task.throughput_gbps / 8:.2f} GB/s\\n"
-                f"{task.unit_kind}-thread[{task.unit_idx}]"
+                f"{gbps:.2f} GB/s\\n"
+                f"{slot_label}"
             )
             rows.append(
-                f'<rect class="{cls}" x="{x:.2f}" y="{bar_y:.2f}" width="{w:.2f}" height="11" rx="2">'
-                f'<title>{html.escape(tooltip)}</title></rect>'
+                f'<g class="task" tabindex="0" data-task-id="{task.task_id}" '
+                f'data-flow="{task.src}->{task.dst}" data-slot="{html.escape(slot_label)}" '
+                f'data-start="{task.start_us:.6f} us" data-end="{task.end_us:.6f} us" '
+                f'data-duration="{duration_us:.6f} us" data-size="{task.size} B" '
+                f'data-throughput="{task.throughput_gbps:.3f} Gbps / {gbps:.3f} GB/s">'
+                f'<title>{html.escape(tooltip)}</title>'
+                f'<rect class="{cls}" x="{x:.2f}" y="{bar_y:.2f}" width="{w:.2f}" height="11" rx="2" />'
                 f'<text class="bar-label" x="{label_x:.2f}" y="{bar_y + 8.5:.2f}">{task.dst}</text>'
+                f'</g>'
             )
 
     return f"""<!doctype html>
@@ -260,12 +269,20 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
     .row-bg {{ fill: #fbfcfe; stroke: #edf1f6; }}
     .row-label {{ fill: #111827; font-size: 12px; font-weight: 650; }}
     .bar {{ stroke: rgba(17,24,39,.24); stroke-width: .5; opacity: .86; }}
+    .task {{ cursor: pointer; outline: none; }}
+    .task:focus .bar, .task.selected .bar {{ stroke: #111827; stroke-width: 1.8; opacity: 1; }}
     .bar.mesh {{ fill: #0f766e; }}
     .bar.clos {{ fill: #2563eb; }}
     .bar-label {{ fill: #fff; font-size: 9px; pointer-events: none; }}
     .legend {{ display: flex; gap: 16px; color: #475467; font-size: 12px; margin-top: 10px; }}
     .swatch {{ display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 5px; }}
-    @media (max-width: 760px) {{ .metrics {{ grid-template-columns: 1fr 1fr; }} }}
+    .details {{ margin-top: 12px; background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; }}
+    .details h2 {{ margin: 0 0 10px; font-size: 16px; }}
+    .detail-grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }}
+    .detail-item {{ background: #fbfcfe; border: 1px solid #edf1f6; border-radius: 6px; padding: 8px 10px; }}
+    .detail-label {{ color: #667085; font-size: 12px; }}
+    .detail-value {{ color: #111827; font-weight: 650; font-variant-numeric: tabular-nums; }}
+    @media (max-width: 760px) {{ .metrics, .detail-grid {{ grid-template-columns: 1fr 1fr; }} }}
   </style>
 </head>
 <body>
@@ -288,7 +305,43 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
     <span><span class="swatch" style="background:#0f766e"></span>mesh 组内 task</span>
     <span><span class="swatch" style="background:#2563eb"></span>clos 跨组 task</span>
   </div>
+  <section class="details" aria-live="polite">
+    <h2>Task detail</h2>
+    <div class="detail-grid" id="detail-grid">
+      <div class="detail-item"><div class="detail-label">选择</div><div class="detail-value">点击上方任意条形流</div></div>
+    </div>
+  </section>
 </main>
+<script>
+  const detailGrid = document.getElementById('detail-grid');
+  const fields = [
+    ['taskId', 'Task'],
+    ['flow', 'Flow'],
+    ['slot', 'Slot'],
+    ['start', 'Start'],
+    ['end', 'End'],
+    ['duration', 'Duration'],
+    ['size', 'Data'],
+    ['throughput', 'Throughput'],
+  ];
+  function selectTask(node) {{
+    document.querySelectorAll('.task.selected').forEach((el) => el.classList.remove('selected'));
+    node.classList.add('selected');
+    detailGrid.innerHTML = fields.map(([key, label]) => {{
+      const value = node.dataset[key] || '-';
+      return `<div class="detail-item"><div class="detail-label">${{label}}</div><div class="detail-value">${{value}}</div></div>`;
+    }}).join('');
+  }}
+  document.querySelectorAll('.task').forEach((node) => {{
+    node.addEventListener('click', () => selectTask(node));
+    node.addEventListener('keydown', (event) => {{
+      if (event.key === 'Enter' || event.key === ' ') {{
+        event.preventDefault();
+        selectTask(node);
+      }}
+    }});
+  }});
+</script>
 </body>
 </html>
 """
