@@ -212,6 +212,25 @@ def load_tp_rows(source_csv: Path, priority: int) -> dict[tuple[int, int], list[
     return rows_by_pair
 
 
+def load_direct_host_ports(topology_csv: Path, rank_start: int, rank_count: int) -> dict[tuple[int, int], tuple[int, int]]:
+    direct_ports: dict[tuple[int, int], tuple[int, int]] = {}
+    rank_end = rank_start + rank_count
+    with topology_csv.open(newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            a = int(row["nodeId1"])
+            b = int(row["nodeId2"])
+            if not (rank_start <= a < rank_end and rank_start <= b < rank_end):
+                continue
+            pa = int(row["portId1"])
+            pb = int(row["portId2"])
+            if a < b:
+                direct_ports[(a, b)] = (pa, pb)
+            else:
+                direct_ports[(b, a)] = (pb, pa)
+    return direct_ports
+
+
 def selected_strict_indices(rank_start: int, rank_count: int) -> dict[tuple[int, int], set[int]]:
     dim = matrix_dim(rank_count)
     selected: dict[tuple[int, int], set[int]] = {}
@@ -229,15 +248,17 @@ def selected_strict_indices(rank_start: int, rank_count: int) -> dict[tuple[int,
 
 
 def write_transport_channels(
-    source_csv: Path,
+    source_case: Path,
     output_csv: Path,
     rank_start: int,
     rank_count: int,
     priority: int,
     mode: str,
 ) -> int:
+    source_csv = source_case / "transport_channel.csv"
     rows_by_pair = load_tp_rows(source_csv, priority)
     selected = selected_strict_indices(rank_start, rank_count)
+    direct_ports = load_direct_host_ports(source_case / "topology.csv", rank_start, rank_count)
     rows_written = 0
     with source_csv.open(newline="") as src_f, output_csv.open("w", newline="") as dst_f:
         reader = csv.DictReader(src_f)
@@ -251,6 +272,19 @@ def write_transport_channels(
                 raise ValueError(f"missing transport channels for pair {pair}")
             if mode == "strict":
                 for idx in sorted(selected[pair]):
+                    if idx == 0 and pair in direct_ports:
+                        direct = direct_ports[pair]
+                        direct_row = next(
+                            (
+                                row for row in rows
+                                if int(row["portId1"]) == direct[0] and int(row["portId2"]) == direct[1]
+                            ),
+                            None,
+                        )
+                        if direct_row is not None:
+                            writer.writerow(direct_row)
+                            rows_written += 1
+                            continue
                     if idx >= len(rows):
                         raise ValueError(f"pair {pair} has {len(rows)} channels, need index {idx}")
                     writer.writerow(rows[idx])
@@ -333,7 +367,7 @@ def main() -> int:
         args.dependency_mode,
     )
     tp_rows = write_transport_channels(
-        source_case / "transport_channel.csv",
+        source_case,
         output_case / "transport_channel.csv",
         args.rank_start,
         args.rank_count,

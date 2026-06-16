@@ -17,8 +17,15 @@
 | `ubx16/alltoallv/scenarios` | AllToAllV 典型场景对比：uniform、mild random、MoE dispatch/combine、cross-group-heavy。 |
 | `ubx16/alltoallv/mild-random-sweep` | AllToAllV mild-random 多 seed 扫描，观察随机不均衡和链路拖尾。 |
 
+## POD64
+
+| 目录 | 内容 |
+| --- | --- |
+| `pod64/alltoall` | POD64 AllToAll baseline case、仿真输出和 rank profile。 |
+
 ## 常用入口
 
 - AllToAllV 场景总报告：`ubx16/alltoallv/scenarios/reports/ns3ub-ubx16-alltoallv-scenarios-report.html`
 - AllToAllV mild-random 扫描：`ubx16/alltoallv/mild-random-sweep/reports/ns3ub-ubx16-alltoallv-mild-random-sweep.html`
 - AllToAll 算法小结：`ubx16/alltoall/notes/ns3ub-ubx16-alltoall-algorithms-summary.zh-CN.md`
+- POD64 AllToAll rank0 profile：`pod64/alltoall/reports/ns3ub-pod64-baseline-threadserial-a2a64-16mb-rank0-profile.html`

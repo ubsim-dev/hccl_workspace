@@ -1,0 +1,4 @@
+algorithm,case,rank_count,per_rank_bytes,tasks,transport_channel_rows,makespan_us,global_GBps,rank0_makespan_us,rank0_GBps
+baseline_fulltp,generated_topology_pod64_hccl_baseline_threadserial_a2a64_16mb,64,16777216,4032,16352,93.739980,11454.47,92.052920,182.26
+matrix_strict,generated_topology_pod64_hccl_matrix_strict_threadserial_a2a64_16mb,64,16777216,4032,2016,80.702060,13305.01,56.477400,297.06
+meshclos_v3_strict,generated_topology_pod64_hccl_meshclos2d_v3_strict_threadserial_a2a64_16mb,64,16777216,4032,2016,71.328480,15053.48,61.878940,271.13
