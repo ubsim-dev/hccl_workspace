@@ -22,6 +22,7 @@ RANK_COUNT = 16
 GROUP_SIZE = 4
 AVG_PER_RANK_BYTES = 16 * 1024 * 1024
 PRIORITY = 7
+UBX16_SOURCE_CASE = REPO_ROOT / "experiments/topologies/ubx16/generated_topology_ubx16"
 
 
 def parse_size(value: str) -> int:
@@ -172,7 +173,7 @@ def generate_algorithm_case(algorithm: str, output_case: Path, per_rank_bytes: i
                 "python3",
                 "tools/generate_hccl_mesh1d_alltoallv_case.py",
                 "--source-case",
-                "generated_topology_ubx16",
+                str(UBX16_SOURCE_CASE),
                 "--output-case",
                 str(output_case),
                 "--rank-count",
@@ -193,7 +194,7 @@ def generate_algorithm_case(algorithm: str, output_case: Path, per_rank_bytes: i
                 "python3",
                 "tools/generate_hccl_matrix_alltoall_case.py",
                 "--source-case",
-                "generated_topology_ubx16",
+                str(UBX16_SOURCE_CASE),
                 "--output-case",
                 str(output_case),
                 "--rank-count",
@@ -203,7 +204,7 @@ def generate_algorithm_case(algorithm: str, output_case: Path, per_rank_bytes: i
                 "--mode",
                 "strict",
                 "--dependency-mode",
-                "round-barrier",
+                "thread-serial",
             ]
         )
     elif algorithm == "closv3":
@@ -212,7 +213,7 @@ def generate_algorithm_case(algorithm: str, output_case: Path, per_rank_bytes: i
                 "python3",
                 "tools/generate_hccl_meshclos2d_v3_alltoall_case.py",
                 "--source-case",
-                "generated_topology_ubx16",
+                str(UBX16_SOURCE_CASE),
                 "--output-case",
                 str(output_case),
                 "--rank-count",
@@ -235,7 +236,7 @@ def generate_algorithm_case(algorithm: str, output_case: Path, per_rank_bytes: i
 
 def run_sim(case_dir: Path, docker_container: str | None) -> None:
     if docker_container:
-        container_case = f"/workspace/hccl_workspace/{case_dir.name}"
+        container_case = f"/workspace/hccl_workspace/{case_dir.relative_to(REPO_ROOT)}"
         run_cmd(
             [
                 "docker",
@@ -310,8 +311,16 @@ def main() -> int:
     )
     parser.add_argument("--algorithms", nargs="+", default=["baseline", "matrix", "closv3"])
     parser.add_argument("--per-rank-bytes", default="16MB")
-    parser.add_argument("--case-prefix", default="generated_topology_ubx16_a2av")
-    parser.add_argument("--summary", type=Path, default=REPO_ROOT / "docs/ns3ub-ubx16-alltoallv-scenarios-summary.csv")
+    parser.add_argument(
+        "--case-prefix",
+        default="experiments/ubx16/alltoallv/scenarios/cases/generated_topology_ubx16_a2av",
+    )
+    parser.add_argument(
+        "--summary",
+        type=Path,
+        default=REPO_ROOT
+        / "experiments/ubx16/alltoallv/scenarios/reports/ns3ub-ubx16-alltoallv-scenarios-summary.csv",
+    )
     parser.add_argument("--docker-container", default="hcomm-dev")
     parser.add_argument("--no-run", action="store_true")
     args = parser.parse_args()
@@ -331,7 +340,7 @@ def main() -> int:
                     {
                         "scenario": scenario,
                         "algorithm": algorithm,
-                        "case": case_dir.name,
+                        "case": str(case_dir.relative_to(REPO_ROOT)),
                         **summary,
                     }
                 )

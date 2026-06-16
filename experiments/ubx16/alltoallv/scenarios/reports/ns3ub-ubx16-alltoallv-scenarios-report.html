@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV 场景仿真报告</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; --blue:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(1180px, calc(100% - 36px)); margin: 26px auto 48px; }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+    h2 { margin: 0 0 12px; font-size: 19px; letter-spacing: 0; }
+    h3 { margin: 0 0 8px; font-size: 16px; letter-spacing: 0; }
+    p { margin: 8px 0; }
+    .muted { color: var(--muted); }
+    section, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 23px; font-weight: 750; line-height: 1.25; }
+    .layout { display: grid; gap: 14px; }
+    .scenario-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .scenario-card p { color: var(--muted); }
+    .metric-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+    .metric-row div { background: #fbfcfe; border: 1px solid #edf1f6; border-radius: 6px; padding: 9px 10px; }
+    .metric-row span { display:block; color: var(--muted); font-size: 12px; }
+    .metric-row strong { display:block; margin-top: 3px; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+    th, td { padding: 8px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child, .links td:nth-child(4) { text-align: left; }
+    th { color: var(--muted); font-size: 12px; background: #fbfcfe; }
+    tr:last-child td { border-bottom: 0; }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    a { color: var(--blue); text-decoration: none; font-weight: 650; }
+    a:hover { text-decoration: underline; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    ul { margin: 8px 0 0 18px; padding: 0; }
+    li { margin: 5px 0; }
+    @media (max-width: 860px) { .grid, .metric-row { grid-template-columns: 1fr; } table { font-size: 12px; } th, td { padding: 7px 5px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV 场景仿真报告</h1>
+    <p class="muted">拓扑为 16 rank、每 4 rank 一个 mesh、4 个 clos 平面；每 rank 总通信量 16MiB。吞吐按全部 task 数据量 / 全局 makespan 计算。</p>
+  </header>
+
+  <div class="grid">
+    <div class="card kpi"><div class="label">均匀场景优化收益</div><div class="value good">+5.9%</div></div>
+    <div class="card kpi"><div class="label">跨组重流量优化收益</div><div class="value good">+3.6%</div></div>
+    <div class="card kpi"><div class="label">轻微随机 V3 劣化</div><div class="value bad">-54.3%</div></div>
+    <div class="card kpi"><div class="label">Dispatch 热点 V3 劣化</div><div class="value bad">-13.5%</div></div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <h2>核心结论</h2>
+      <ul>
+        <li>当 V 分布接近均匀，Matrix / MeshClos V3 可以把跨组流量铺到 4 个 clos 平面，global 吞吐从 3631.29 GB/s 提到 3844.14 GB/s，提升 5.9%。</li>
+        <li>跨组占比很高但仍均匀时，MeshClos V3 仍有收益：从 3062.52 GB/s 到 3174.03 GB/s，提升 3.6%。</li>
+        <li>一旦 AllToAllV 出现目的热点或源热点，当前 Matrix / MeshClos V3 的“peer 绑定单平面/单 slot”会让热点大流拖尾；轻微随机下 V3 比 baseline 低 54.3%，dispatch 热目的下低 13.5%。</li>
+        <li>这个结果说明优化算法对均匀 AllToAll 很有效，但对 MoE 类 AllToAllV 需要进一步做大 peer 流拆分，或者按 size 重新做平面选择，否则热点 V 会吞掉分平面收益。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>场景结果</h2>
+      <p class="muted">场景表以 <code>Global GB/s</code> 和全局 makespan 判断优劣；<code>Rank0 TX GB/s</code> 只是辅助观察列。combine 场景的 hot source 是 rank 3/7/11/15，因此 rank0 不代表瓶颈。</p>
+      <div class="scenario-grid">
+        
+      <section class="scenario-card">
+        <h3>均匀 AllToAllV</h3>
+        <p>每个 src 的 16MiB 平均分给 15 个 peer，是最接近 AllToAll 的基准场景。</p>
+        <div class="metric-row">
+          <div><span>最佳</span><strong>Matrix</strong></div>
+          <div><span>最佳吞吐</span><strong>3844.14 GB/s</strong></div>
+          <div><span>最佳相对 baseline</span><strong class="good">提升 5.9%</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>算法</th><th>Makespan(us)</th><th>Global GB/s</th><th>vs baseline</th><th>Rank0 TX GB/s</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline</td><td>73.923</td><td>3631.29</td><td>0.0%</td><td>229.24</td></tr>
+            <tr><td>Matrix</td><td>69.830</td><td>3844.14</td><td class="good">+5.9%</td><td>240.26</td></tr>
+            <tr><td>MeshClos V3</td><td>69.830</td><td>3844.13</td><td class="good">+5.9%</td><td>240.26</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="scenario-card">
+        <h3>轻微随机 V</h3>
+        <p>每个 src 总量固定，但 peer 粒度有轻微长尾；目的 rank CV 约 0.25。</p>
+        <div class="metric-row">
+          <div><span>最佳</span><strong>Baseline Mesh1D</strong></div>
+          <div><span>最佳吞吐</span><strong>2703.19 GB/s</strong></div>
+          <div><span>最佳相对 baseline</span><strong class="good">baseline 即最佳</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>算法</th><th>Makespan(us)</th><th>Global GB/s</th><th>vs baseline</th><th>Rank0 TX GB/s</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline</td><td>99.303</td><td>2703.19</td><td>0.0%</td><td>170.99</td></tr>
+            <tr><td>Matrix</td><td>207.096</td><td>1296.19</td><td class="bad">-52.0%</td><td>81.01</td></tr>
+            <tr><td>MeshClos V3</td><td>217.313</td><td>1235.25</td><td class="bad">-54.3%</td><td>85.86</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="scenario-card">
+        <h3>MoE dispatch: 热目的 rank</h3>
+        <p>所有 src 倾向发往少数 hot 目的 rank，模拟 dispatch 后 token 聚集到专家所在 rank。</p>
+        <div class="metric-row">
+          <div><span>最佳</span><strong>Baseline Mesh1D</strong></div>
+          <div><span>最佳吞吐</span><strong>1197.55 GB/s</strong></div>
+          <div><span>最佳相对 baseline</span><strong class="good">baseline 即最佳</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>算法</th><th>Makespan(us)</th><th>Global GB/s</th><th>vs baseline</th><th>Rank0 TX GB/s</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline</td><td>224.153</td><td>1197.55</td><td>0.0%</td><td>85.14</td></tr>
+            <tr><td>Matrix</td><td>261.105</td><td>1028.07</td><td class="bad">-14.2%</td><td>80.09</td></tr>
+            <tr><td>MeshClos V3</td><td>259.242</td><td>1035.46</td><td class="bad">-13.5%</td><td>80.17</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="scenario-card">
+        <h3>MoE combine: 热源 rank</h3>
+        <p>少数 hot 源 rank 发出更多数据，模拟 combine 从专家 rank 回流。</p>
+        <div class="metric-row">
+          <div><span>最佳</span><strong>Baseline Mesh1D</strong></div>
+          <div><span>最佳吞吐</span><strong>1198.60 GB/s</strong></div>
+          <div><span>最佳相对 baseline</span><strong class="good">baseline 即最佳</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>算法</th><th>Makespan(us)</th><th>Global GB/s</th><th>vs baseline</th><th>Rank0 TX GB/s</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline</td><td>223.958</td><td>1198.60</td><td>0.0%</td><td>59.78</td></tr>
+            <tr><td>Matrix</td><td>261.105</td><td>1028.07</td><td class="bad">-14.2%</td><td>166.54</td></tr>
+            <tr><td>MeshClos V3</td><td>240.702</td><td>1115.22</td><td class="bad">-7.0%</td><td>161.10</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="scenario-card">
+        <h3>跨组重流量</h3>
+        <p>每个 src 主要发跨 mesh 数据，用来观察 clos 平面调度是否充分。</p>
+        <div class="metric-row">
+          <div><span>最佳</span><strong>MeshClos V3</strong></div>
+          <div><span>最佳吞吐</span><strong>3174.03 GB/s</strong></div>
+          <div><span>最佳相对 baseline</span><strong class="good">提升 3.6%</strong></div>
+        </div>
+        <table>
+          <thead><tr><th>算法</th><th>Makespan(us)</th><th>Global GB/s</th><th>vs baseline</th><th>Rank0 TX GB/s</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline</td><td>87.652</td><td>3062.52</td><td>0.0%</td><td>191.85</td></tr>
+            <tr><td>Matrix</td><td>84.576</td><td>3173.91</td><td class="good">+3.6%</td><td>198.38</td></tr>
+            <tr><td>MeshClos V3</td><td>84.572</td><td>3174.03</td><td class="good">+3.6%</td><td>198.38</td></tr>
+          </tbody>
+        </table>
+      </section>
+      </div>
+    </section>
+
+    <section>
+      <h2>Profiling 图</h2>
+      <p class="muted">这些图是典型 rank 的 TX 视角。点击条形可以看到 task 开始/结束时间、数据量、吞吐和逻辑 slot。</p>
+      <table class="links">
+        <thead><tr><th>场景</th><th>算法</th><th>Rank</th><th>为什么看它</th><th>链接</th></tr></thead>
+        <tbody>
+          
+        <tr>
+          <td>均匀 AllToAllV</td>
+          <td>Baseline Mesh1D</td>
+          <td>rank 0</td>
+          <td>均匀基线 rank0，展示 Mesh1D 多 peer 并发形态</td>
+          <td><a href="ns3ub-ubx16-a2av-uniform-baseline-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>均匀 AllToAllV</td>
+          <td>Matrix</td>
+          <td>rank 0</td>
+          <td>均匀 Matrix rank0，展示 round/slot 调度</td>
+          <td><a href="ns3ub-ubx16-a2av-uniform-matrix-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>均匀 AllToAllV</td>
+          <td>MeshClos V3</td>
+          <td>rank 0</td>
+          <td>均匀 MeshClos V3 rank0，展示 mesh+4 clos 逻辑单元</td>
+          <td><a href="ns3ub-ubx16-a2av-uniform-closv3-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>轻微随机 V</td>
+          <td>Baseline Mesh1D</td>
+          <td>rank 0</td>
+          <td>轻微随机下 baseline 对 rank0 的多 TP 分摊</td>
+          <td><a href="ns3ub-ubx16-a2av-mild_random-baseline-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>轻微随机 V</td>
+          <td>Matrix</td>
+          <td>rank 0</td>
+          <td>轻微随机下 Matrix 单 slot 热点拖尾</td>
+          <td><a href="ns3ub-ubx16-a2av-mild_random-matrix-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>轻微随机 V</td>
+          <td>MeshClos V3</td>
+          <td>rank 0</td>
+          <td>轻微随机下 V3 单平面热点拖尾</td>
+          <td><a href="ns3ub-ubx16-a2av-mild_random-closv3-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>MoE dispatch: 热目的 rank</td>
+          <td>Baseline Mesh1D</td>
+          <td>rank 0</td>
+          <td>dispatch 热目的场景，rank0 作为普通源 rank</td>
+          <td><a href="ns3ub-ubx16-a2av-dispatch_hot4-baseline-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>MoE dispatch: 热目的 rank</td>
+          <td>Matrix</td>
+          <td>rank 0</td>
+          <td>dispatch 热目的场景，Matrix 源 rank 视角</td>
+          <td><a href="ns3ub-ubx16-a2av-dispatch_hot4-matrix-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>MoE dispatch: 热目的 rank</td>
+          <td>MeshClos V3</td>
+          <td>rank 0</td>
+          <td>dispatch 热目的场景，V3 源 rank 视角</td>
+          <td><a href="ns3ub-ubx16-a2av-dispatch_hot4-closv3-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>MoE combine: 热源 rank</td>
+          <td>Baseline Mesh1D</td>
+          <td>rank 3</td>
+          <td>combine 热源场景，rank3 是 hot source</td>
+          <td><a href="ns3ub-ubx16-a2av-combine_hot4-baseline-rank3-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>MoE combine: 热源 rank</td>
+          <td>Matrix</td>
+          <td>rank 3</td>
+          <td>combine 热源场景，Matrix hot source</td>
+          <td><a href="ns3ub-ubx16-a2av-combine_hot4-matrix-rank3-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>MoE combine: 热源 rank</td>
+          <td>MeshClos V3</td>
+          <td>rank 3</td>
+          <td>combine 热源场景，V3 hot source</td>
+          <td><a href="ns3ub-ubx16-a2av-combine_hot4-closv3-rank3-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>跨组重流量</td>
+          <td>Baseline Mesh1D</td>
+          <td>rank 0</td>
+          <td>跨组重流量 baseline rank0</td>
+          <td><a href="ns3ub-ubx16-a2av-cross_group_heavy-baseline-rank0-profile.html">打开 profile</a></td>
+        </tr>
+
+        <tr>
+          <td>跨组重流量</td>
+          <td>MeshClos V3</td>
+          <td>rank 0</td>
+          <td>跨组重流量 V3 rank0</td>
+          <td><a href="ns3ub-ubx16-a2av-cross_group_heavy-closv3-rank0-profile.html">打开 profile</a></td>
+        </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>定量原因</h2>
+      <ul>
+        <li>Baseline 的 <code>transport_channel</code> 行数更多，模型里一个大的 peer 流可以被多 TP 分摊；所以在 dispatch/combine 热点分布下，baseline 虽然调度粗糙，但热点流不一定被单条 50GB/s 平面卡死。</li>
+        <li>MeshClos V3 / Matrix 当前 strict 建模更接近“每个 peer 选择一个 clos 逻辑平面”。均匀时这是优势，因为 15 个 peer 自然分散；热点时这是劣势，因为最大的 peer 数据量达到 4.00MiB，单 peer 拖尾决定 makespan。</li>
+        <li>Rank0 数值不能单独代表全局，尤其 combine 场景 hot source 是 rank 3/7/11/15；报告同时给 global GB/s 和热点 rank profiling。</li>
+      </ul>
+    </section>
+  </div>
+</main>
+</body>
+</html>

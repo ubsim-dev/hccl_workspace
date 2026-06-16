@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE_CASE = REPO_ROOT / "generated_topology"
+DEFAULT_SOURCE_CASE = REPO_ROOT / "experiments/topologies/ubx16/generated_topology_ubx16"
 COPY_FILES = (
     "node.csv",
     "topology.csv",
@@ -291,7 +291,11 @@ def main() -> int:
     output_case = args.output_case
     if output_case is None:
         size_name = format_size_for_name(per_rank_bytes)
-        output_case = REPO_ROOT / f"generated_topology_ubx16_hccl_baseline_threadserial_a2a{args.rank_count}_{size_name}"
+        output_case = (
+            REPO_ROOT
+            / "experiments/ubx16/alltoall/cases"
+            / f"generated_topology_ubx16_hccl_baseline_threadserial_a2a{args.rank_count}_{size_name}"
+        )
     output_case = output_case.resolve()
 
     copy_case_files(source_case, output_case)

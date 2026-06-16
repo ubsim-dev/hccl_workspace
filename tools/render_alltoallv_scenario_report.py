@@ -12,8 +12,10 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SUMMARY = REPO_ROOT / "docs/ns3ub-ubx16-alltoallv-scenarios-summary.csv"
-REPORT = REPO_ROOT / "docs/ns3ub-ubx16-alltoallv-scenarios-report.html"
+REPORT_DIR = REPO_ROOT / "experiments/ubx16/alltoallv/scenarios/reports"
+SUMMARY = REPORT_DIR / "ns3ub-ubx16-alltoallv-scenarios-summary.csv"
+REPORT = REPORT_DIR / "ns3ub-ubx16-alltoallv-scenarios-report.html"
+UBX16_SOURCE_CASE = REPO_ROOT / "experiments/topologies/ubx16/generated_topology_ubx16"
 
 ALGORITHM_LABELS = {
     "baseline": "Baseline Mesh1D",
@@ -110,7 +112,7 @@ def render_profiles(rows_by_scenario: dict[str, dict[str, dict[str, str]]]) -> l
     for profile in PROFILES:
         row = rows_by_scenario[profile.scenario][profile.algorithm]
         case = row["case"]
-        output = Path("docs") / profile_filename(profile)
+        output = REPORT_DIR / profile_filename(profile)
         title = (
             f"{SCENARIO_LABELS[profile.scenario]} | "
             f"{ALGORITHM_LABELS[profile.algorithm]} | rank {profile.rank}"
@@ -157,7 +159,7 @@ def render_profiles(rows_by_scenario: dict[str, dict[str, dict[str, str]]]) -> l
                 "--group-size",
                 "4",
                 "--source-case",
-                "generated_topology_ubx16",
+                str(UBX16_SOURCE_CASE),
                 "--title",
                 title,
             ]
@@ -183,7 +185,7 @@ def scenario_cards(rows_by_scenario: dict[str, dict[str, dict[str, str]]]) -> st
         matrix_vs_baseline = matrix_g / baseline_g - 1.0
         best_label = ALGORITHM_LABELS[best["algorithm"]]
         if abs(opt_vs_baseline) < 1e-9:
-            trend_text = "基准 0.0%"
+            trend_text = "baseline 即最佳"
             trend_class = "good"
         elif opt_vs_baseline > 0:
             trend_text = f"提升 {pct(opt_vs_baseline)}"
@@ -199,10 +201,10 @@ def scenario_cards(rows_by_scenario: dict[str, dict[str, dict[str, str]]]) -> st
         <div class="metric-row">
           <div><span>最佳</span><strong>{html.escape(best_label)}</strong></div>
           <div><span>最佳吞吐</span><strong>{fmt(best_g)} GB/s</strong></div>
-          <div><span>相对 baseline</span><strong class="{trend_class}">{trend_text}</strong></div>
+          <div><span>最佳相对 baseline</span><strong class="{trend_class}">{trend_text}</strong></div>
         </div>
         <table>
-          <thead><tr><th>算法</th><th>Makespan(us)</th><th>Global GB/s</th><th>vs baseline</th><th>Rank0 GB/s</th></tr></thead>
+          <thead><tr><th>算法</th><th>Makespan(us)</th><th>Global GB/s</th><th>vs baseline</th><th>Rank0 TX GB/s</th></tr></thead>
           <tbody>
             <tr><td>Baseline</td><td>{fmt(float(baseline['makespan_us']), 3)}</td><td>{fmt(baseline_g)}</td><td>0.0%</td><td>{fmt(float(baseline['rank0_GBps']))}</td></tr>
             <tr><td>Matrix</td><td>{fmt(float(matrix['makespan_us']), 3)}</td><td>{fmt(matrix_g)}</td><td class="{ 'good' if matrix_vs_baseline >= 0 else 'bad' }">{signed_pct(matrix_vs_baseline)}</td><td>{fmt(float(matrix['rank0_GBps']))}</td></tr>
@@ -310,6 +312,7 @@ def render_report(rows: list[dict[str, str]], rendered: list[tuple[Profile, str]
 
     <section>
       <h2>场景结果</h2>
+      <p class="muted">场景表以 <code>Global GB/s</code> 和全局 makespan 判断优劣；<code>Rank0 TX GB/s</code> 只是辅助观察列。combine 场景的 hot source 是 rank 3/7/11/15，因此 rank0 不代表瓶颈。</p>
       <div class="scenario-grid">
         {scenario_cards(grouped)}
       </div>

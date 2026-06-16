@@ -25,7 +25,7 @@ import networkx as nx
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NS3_TOOLS = REPO_ROOT / "ns-3-ub" / "scratch" / "ns-3-ub-tools"
-DEFAULT_NETWORK_ATTR = REPO_ROOT / "generated_topology" / "network_attribute.txt"
+DEFAULT_NETWORK_ATTR = REPO_ROOT / "experiments/topologies/pod64/generated_topology/network_attribute.txt"
 
 sys.path.insert(0, str(NS3_TOOLS))
 try:
@@ -123,7 +123,12 @@ def build_topology(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("-o", "--output-case", type=Path, default=REPO_ROOT / "generated_topology_ubx16")
+    parser.add_argument(
+        "-o",
+        "--output-case",
+        type=Path,
+        default=REPO_ROOT / "experiments/topologies/ubx16/generated_topology_ubx16",
+    )
     parser.add_argument("--rank-count", type=int, default=16)
     parser.add_argument("--group-size", type=int, default=4)
     parser.add_argument("--plane-count", type=int, default=4)

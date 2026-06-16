@@ -354,7 +354,11 @@ def main() -> int:
     parser.add_argument("--rank", type=int, required=True)
     parser.add_argument("--rank-count", type=int, required=True)
     parser.add_argument("--group-size", type=int, default=4)
-    parser.add_argument("--source-case", type=Path, default=Path("generated_topology"))
+    parser.add_argument(
+        "--source-case",
+        type=Path,
+        default=Path("experiments/topologies/ubx16/generated_topology_ubx16"),
+    )
     parser.add_argument("--clos-channels", type=int)
     parser.add_argument("--priority", type=int, default=7)
     parser.add_argument("--title")
