@@ -2,8 +2,7 @@
 """Render a single-rank Mesh1D baseline task profile.
 
 Rows are logical Mesh1D parallel slots within each round, not physical ports.
-For the current baseline generator, each rank emits up to 4 tasks per round;
-the Nth task for that source in a round is shown on mesh1d-thread[N].
+The Nth task for that source in a round is shown on mesh1d-thread[N].
 """
 
 from __future__ import annotations
@@ -29,25 +28,30 @@ class Task:
     unit_idx: int
 
 
-def load_unit_indices(case_dir: Path, rank: int, priority: int) -> dict[int, int]:
-    task_ids: list[int] = []
+def load_unit_indices(case_dir: Path, rank: int, priority: int, concurrent: int | None) -> dict[int, int]:
+    task_rows: list[dict[str, str]] = []
     with (case_dir / "traffic.csv").open(newline="") as f:
         for row in csv.DictReader(f):
             if int(row["priority"]) != priority or int(row["sourceNodeId"]) != rank:
                 continue
-            task_ids.append(int(row["taskId"]))
+            task_rows.append(row)
+
+    if concurrent is None:
+        first_round = [row for row in task_rows if not row.get("dependOnPhases", "").strip()]
+        concurrent = len(first_round) if first_round else len(task_rows)
+    if concurrent <= 0:
+        raise ValueError("concurrent must be positive")
 
     unit_by_task: dict[int, int] = {}
-    # Mesh1D generation writes tasks round-major, and each source contributes up
-    # to four peer tasks per round. In thread-serial mode phaseId is unique per
-    # task, so phaseId cannot be used to recover the lane.
-    for idx, task_id in enumerate(task_ids):
-        unit_by_task[task_id] = idx % 4
+    # Mesh1D generation writes tasks round-major. In thread-serial mode phaseId
+    # is unique per task, so phaseId cannot be used to recover the lane.
+    for idx, row in enumerate(task_rows):
+        unit_by_task[int(row["taskId"])] = idx % concurrent
     return unit_by_task
 
 
-def load_rank_tasks(case_dir: Path, rank: int, priority: int) -> list[Task]:
-    unit_by_task = load_unit_indices(case_dir, rank, priority)
+def load_rank_tasks(case_dir: Path, rank: int, priority: int, concurrent: int | None) -> list[Task]:
+    unit_by_task = load_unit_indices(case_dir, rank, priority, concurrent)
     tasks: list[Task] = []
     with (case_dir / "output" / "task_statistics.csv").open(newline="") as f:
         for row in csv.DictReader(f):
@@ -227,10 +231,11 @@ def main() -> int:
     parser.add_argument("-o", "--output", type=Path, required=True)
     parser.add_argument("--rank", type=int, required=True)
     parser.add_argument("--priority", type=int, default=7)
+    parser.add_argument("--concurrent", type=int, help="Logical Mesh1D slots per round. Inferred from traffic.csv when omitted.")
     parser.add_argument("--title", default="Mesh1D rank profile")
     args = parser.parse_args()
 
-    tasks = load_rank_tasks(args.case_dir, args.rank, args.priority)
+    tasks = load_rank_tasks(args.case_dir, args.rank, args.priority, args.concurrent)
     if not tasks:
         raise ValueError(f"no tasks found for rank {args.rank}")
     args.output.parent.mkdir(parents=True, exist_ok=True)

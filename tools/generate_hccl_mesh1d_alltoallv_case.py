@@ -3,9 +3,9 @@
 
 The script copies topology/routing/network files from an existing case,
 filters transport_channel.csv to participating ranks, and generates traffic.csv
-using the Mesh1D baseline schedule:
+using the current HCCL Mesh1D baseline schedule:
 
-  - each rank talks to up to 4 peers per round
+  - each rank talks to up to ALLTOALLV_DIRECT_FULLMESH_CONCURRENT_SIZE peers per round
   - peers are selected symmetrically around the rank
   - each rank-peer flow is one URMA_WRITE task
 """
@@ -97,8 +97,8 @@ def mesh1d_phase_peers(rank: int, rank_count: int, phase: int, concurrent: int) 
     return peers
 
 
-def mesh1d_phase_count(rank_count: int) -> int:
-    concurrent = min(4, rank_count - 1)
+def mesh1d_phase_count(rank_count: int, concurrent_limit: int) -> int:
+    concurrent = min(concurrent_limit, rank_count - 1)
     return (rank_count - 2 + concurrent) // concurrent
 
 
@@ -109,14 +109,15 @@ def write_traffic(
     priority: int,
     phase_delay: str,
     dependency_mode: str,
+    concurrent_limit: int,
 ) -> tuple[int, int, int, int]:
     rank_count = len(rank_ids)
     if rank_count < 2:
         raise ValueError("rank-count must be at least 2")
     per_peer_base = per_rank_bytes // (rank_count - 1)
     per_peer_remainder = per_rank_bytes % (rank_count - 1)
-    concurrent = min(4, rank_count - 1)
-    phase_count = mesh1d_phase_count(rank_count)
+    concurrent = min(concurrent_limit, rank_count - 1)
+    phase_count = mesh1d_phase_count(rank_count, concurrent_limit)
 
     task_id = 0
     phases: set[int] = set()
@@ -172,27 +173,61 @@ def copy_case_files(source_case: Path, output_case: Path) -> None:
         shutil.copy2(src, output_case / filename)
 
 
-def filter_transport_channels(source_csv: Path, output_csv: Path, rank_ids: set[int], priority: int) -> int:
+def filter_transport_channels(
+    source_csv: Path,
+    output_csv: Path,
+    rank_ids: set[int],
+    priority: int,
+    tp_mode: str,
+) -> int:
     if not source_csv.exists():
         raise FileNotFoundError(source_csv)
-    rows = 0
+    selected_by_pair: dict[tuple[int, int], dict[str, str]] = {}
+    rows_to_write: list[dict[str, str]] = []
     with source_csv.open(newline="") as src_f, output_csv.open("w", newline="") as dst_f:
         reader = csv.DictReader(src_f)
         if reader.fieldnames is None:
             raise ValueError(f"{source_csv} has no header")
-        writer = csv.DictWriter(dst_f, fieldnames=reader.fieldnames)
-        writer.writeheader()
         for row in reader:
             if (
                 int(row["nodeId1"]) in rank_ids
                 and int(row["nodeId2"]) in rank_ids
                 and int(row["priority"]) == priority
             ):
-                writer.writerow(row)
-                rows += 1
-    if rows == 0:
+                if tp_mode == "full":
+                    rows_to_write.append(row)
+                elif tp_mode == "single":
+                    pair = (int(row["nodeId1"]), int(row["nodeId2"]))
+                    prev = selected_by_pair.get(pair)
+                    key = (
+                        int(row.get("metric", 0)),
+                        int(row["portId1"]),
+                        int(row["portId2"]),
+                        int(row["tpn1"]),
+                        int(row["tpn2"]),
+                    )
+                    if prev is None:
+                        selected_by_pair[pair] = row
+                    else:
+                        prev_key = (
+                            int(prev.get("metric", 0)),
+                            int(prev["portId1"]),
+                            int(prev["portId2"]),
+                            int(prev["tpn1"]),
+                            int(prev["tpn2"]),
+                        )
+                        if key < prev_key:
+                            selected_by_pair[pair] = row
+                else:
+                    raise ValueError(f"unknown tp_mode {tp_mode}")
+        if tp_mode == "single":
+            rows_to_write = [selected_by_pair[pair] for pair in sorted(selected_by_pair)]
+        writer = csv.DictWriter(dst_f, fieldnames=reader.fieldnames)
+        writer.writeheader()
+        writer.writerows(rows_to_write)
+    if len(rows_to_write) == 0:
         raise ValueError(f"no transport channels matched rank set and priority {priority}")
-    return rows
+    return len(rows_to_write)
 
 
 def patch_network_attributes(path: Path, enable_port_trace: bool, disable_packet_trace: bool) -> None:
@@ -224,6 +259,19 @@ def main() -> int:
     parser.add_argument("--rank-start", type=int, default=0)
     parser.add_argument("-b", "--per-rank-bytes", required=True, help="Examples: 256MB, 1GB, 16777216")
     parser.add_argument("--priority", type=int, default=7)
+    parser.add_argument(
+        "--concurrent",
+        type=int,
+        default=16,
+        help="ALLTOALLV_DIRECT_FULLMESH_CONCURRENT_SIZE from the HCCL Mesh1D baseline. "
+        "Current hccl uses 16; older hccl-xzw experiments used 4.",
+    )
+    parser.add_argument(
+        "--tp-mode",
+        choices=("full", "single"),
+        default="full",
+        help="full keeps all transport channels for each pair; single keeps one TP per directed pair.",
+    )
     parser.add_argument("--phase-delay", default="0ns")
     parser.add_argument(
         "--dependency-mode",
@@ -243,7 +291,7 @@ def main() -> int:
     output_case = args.output_case
     if output_case is None:
         size_name = format_size_for_name(per_rank_bytes)
-        output_case = REPO_ROOT / f"generated_topology_hccl_mesh1d_a2av{args.rank_count}_{size_name}"
+        output_case = REPO_ROOT / f"generated_topology_ubx16_hccl_baseline_threadserial_a2a{args.rank_count}_{size_name}"
     output_case = output_case.resolve()
 
     copy_case_files(source_case, output_case)
@@ -252,6 +300,7 @@ def main() -> int:
         output_case / "transport_channel.csv",
         set(rank_ids),
         args.priority,
+        args.tp_mode,
     )
     task_count, phase_count, per_peer_min_bytes, per_peer_max_bytes = write_traffic(
         output_case / "traffic.csv",
@@ -260,6 +309,7 @@ def main() -> int:
         args.priority,
         args.phase_delay,
         args.dependency_mode,
+        args.concurrent,
     )
     patch_network_attributes(
         output_case / "network_attribute.txt",
@@ -273,7 +323,11 @@ def main() -> int:
         f"per_rank_bytes={per_rank_bytes} "
         f"per_peer_bytes={per_peer_min_bytes}..{per_peer_max_bytes}"
     )
-    print(f"dependency_mode={args.dependency_mode} phases={phase_count} tasks={task_count} transport_channel_rows={tp_rows}")
+    print(
+        f"dependency_mode={args.dependency_mode} tp_mode={args.tp_mode} "
+        f"concurrent={args.concurrent} phases={phase_count} tasks={task_count} "
+        f"transport_channel_rows={tp_rows}"
+    )
     return 0
 
 

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 V3 task85 5-&gt;1 x8 Rank1 Profile</title>
+  <style>
+    body { margin: 0; background: #f6f7f9; color: #1f2937; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(1240px, calc(100% - 32px)); margin: 24px auto 44px; }
+    h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: 0; }
+    .muted { color: #667085; margin: 0 0 14px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .metric { background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 12px; }
+    .k { color: #667085; font-size: 12px; }
+    .v { font-size: 22px; font-weight: 700; }
+    .panel { overflow-x: auto; background: #fff; border: 1px solid #d8dee8; border-radius: 8px; }
+    svg { display: block; min-width: 1180px; }
+    .grid { stroke: #e3e8f0; stroke-width: 1; }
+    .tick, .row-meta { fill: #667085; font-size: 11px; }
+    .row-bg { fill: #fbfcfe; stroke: #edf1f6; }
+    .row-label { fill: #111827; font-size: 12px; font-weight: 650; }
+    .bar { stroke: rgba(17,24,39,.24); stroke-width: .5; opacity: .86; }
+    .task { cursor: pointer; outline: none; }
+    .task:focus .bar, .task.selected .bar { stroke: #111827; stroke-width: 1.8; opacity: 1; }
+    .bar.mesh { fill: #0f766e; }
+    .bar.clos { fill: #2563eb; }
+    .bar-label { fill: #fff; font-size: 9px; pointer-events: none; }
+    .legend { display: flex; gap: 16px; color: #475467; font-size: 12px; margin-top: 10px; }
+    .swatch { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 5px; }
+    .details { margin-top: 12px; background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; }
+    .details h2 { margin: 0 0 10px; font-size: 16px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .detail-item { background: #fbfcfe; border: 1px solid #edf1f6; border-radius: 6px; padding: 8px 10px; }
+    .detail-label { color: #667085; font-size: 12px; }
+    .detail-value { color: #111827; font-weight: 650; font-variant-numeric: tabular-nums; }
+    @media (max-width: 760px) { .metrics, .detail-grid { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>UBX16 V3 task85 5-&gt;1 x8 Rank1 Profile</h1>
+  <p class="muted">单 rank TX 视角；行是 V3 源码逻辑并行单元，条形是 ns-3 task 的实际 start/end。条形上的数字是目的 rank。</p>
+  <div class="metrics">
+    <div class="metric"><div class="k">Case</div><div class="v">generated_topology_ubx16_hccl_meshclos2d_v3_strict_threadserial_a2a16_16mb_task85x8</div></div>
+    <div class="metric"><div class="k">Rank</div><div class="v">1</div></div>
+    <div class="metric"><div class="k">Tasks</div><div class="v">15</div></div>
+    <div class="metric"><div class="k">TX GB/s</div><div class="v">121.14</div></div>
+  </div>
+  <div class="panel">
+    <svg width="1180" height="520" role="img" aria-label="UBX16 V3 task85 5-&gt;1 x8 Rank1 Profile">
+      <line class="grid" x1="172.00" y1="56" x2="172.00" y2="476" /><text class="tick" x="172.00" y="48" text-anchor="middle">0.0us</text><line class="grid" x1="294.50" y1="56" x2="294.50" y2="476" /><text class="tick" x="294.50" y="48" text-anchor="middle">17.3us</text><line class="grid" x1="417.00" y1="56" x2="417.00" y2="476" /><text class="tick" x="417.00" y="48" text-anchor="middle">34.6us</text><line class="grid" x1="539.50" y1="56" x2="539.50" y2="476" /><text class="tick" x="539.50" y="48" text-anchor="middle">51.9us</text><line class="grid" x1="662.00" y1="56" x2="662.00" y2="476" /><text class="tick" x="662.00" y="48" text-anchor="middle">69.2us</text><line class="grid" x1="784.50" y1="56" x2="784.50" y2="476" /><text class="tick" x="784.50" y="48" text-anchor="middle">86.6us</text><line class="grid" x1="907.00" y1="56" x2="907.00" y2="476" /><text class="tick" x="907.00" y="48" text-anchor="middle">103.9us</text><line class="grid" x1="1029.50" y1="56" x2="1029.50" y2="476" /><text class="tick" x="1029.50" y="48" text-anchor="middle">121.2us</text><line class="grid" x1="1152.00" y1="56" x2="1152.00" y2="476" /><text class="tick" x="1152.00" y="48" text-anchor="middle">138.5us</text>
+      <rect class="row-bg" x="0" y="80.00" width="1180" height="24.00" /><text class="row-label" x="16" y="96.00">mesh-thread[0]</text><text class="row-meta" x="124" y="96.00">1 task</text><g class="task" tabindex="0" data-task-id="1" data-flow="1->2" data-slot="mesh-thread[0]" data-start="0.000000 us" data-end="23.192340 us" data-duration="23.192340 us" data-size="1118481 B" data-throughput="385.810 Gbps / 48.226 GB/s"><title>task 1: 1-&gt;2\n0.000us - 23.192us\n1118481 bytes\n48.23 GB/s\nmesh-thread[0]</title><rect class="bar mesh" x="172.00" y="87.00" width="164.12" height="11" rx="2" /><text class="bar-label" x="176.00" y="95.50">2</text></g><rect class="row-bg" x="0" y="112.00" width="1180" height="24.00" /><text class="row-label" x="16" y="128.00">mesh-thread[1]</text><text class="row-meta" x="124" y="128.00">1 task</text><g class="task" tabindex="0" data-task-id="17" data-flow="1->3" data-slot="mesh-thread[1]" data-start="0.000000 us" data-end="23.192340 us" data-duration="23.192340 us" data-size="1118481 B" data-throughput="385.810 Gbps / 48.226 GB/s"><title>task 17: 1-&gt;3\n0.000us - 23.192us\n1118481 bytes\n48.23 GB/s\nmesh-thread[1]</title><rect class="bar mesh" x="172.00" y="119.00" width="164.12" height="11" rx="2" /><text class="bar-label" x="176.00" y="127.50">3</text></g><rect class="row-bg" x="0" y="144.00" width="1180" height="24.00" /><text class="row-label" x="16" y="160.00">mesh-thread[2]</text><text class="row-meta" x="124" y="160.00">1 task</text><g class="task" tabindex="0" data-task-id="33" data-flow="1->0" data-slot="mesh-thread[2]" data-start="0.000000 us" data-end="23.192360 us" data-duration="23.192360 us" data-size="1118482 B" data-throughput="385.810 Gbps / 48.226 GB/s"><title>task 33: 1-&gt;0\n0.000us - 23.192us\n1118482 bytes\n48.23 GB/s\nmesh-thread[2]</title><rect class="bar mesh" x="172.00" y="151.00" width="164.12" height="11" rx="2" /><text class="bar-label" x="176.00" y="159.50">0</text></g><rect class="row-bg" x="0" y="176.00" width="1180" height="24.00" /><text class="row-label" x="16" y="192.00">clos-thread[0]</text><text class="row-meta" x="124" y="192.00">2 task</text><g class="task" tabindex="0" data-task-id="49" data-flow="1->13" data-slot="clos-thread[0]" data-start="0.000000 us" data-end="23.275740 us" data-duration="23.275740 us" data-size="1118481 B" data-throughput="384.428 Gbps / 48.054 GB/s"><title>task 49: 1-&gt;13\n0.000us - 23.276us\n1118481 bytes\n48.05 GB/s\nclos-thread[0]</title><rect class="bar clos" x="172.00" y="183.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="176.00" y="191.50">13</text></g><g class="task" tabindex="0" data-task-id="193" data-flow="1->12" data-slot="clos-thread[0]" data-start="46.552720 us" data-end="69.829360 us" data-duration="23.276640 us" data-size="1118481 B" data-throughput="384.413 Gbps / 48.052 GB/s"><title>task 193: 1-&gt;12\n46.553us - 69.829us\n1118481 bytes\n48.05 GB/s\nclos-thread[0]</title><rect class="bar clos" x="501.42" y="183.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="505.42" y="191.50">12</text></g><rect class="row-bg" x="0" y="208.00" width="1180" height="24.00" /><text class="row-label" x="16" y="224.00">clos-thread[1]</text><text class="row-meta" x="124" y="224.00">2 task</text><g class="task" tabindex="0" data-task-id="65" data-flow="1->9" data-slot="clos-thread[1]" data-start="0.000000 us" data-end="23.275740 us" data-duration="23.275740 us" data-size="1118481 B" data-throughput="384.428 Gbps / 48.054 GB/s"><title>task 65: 1-&gt;9\n0.000us - 23.276us\n1118481 bytes\n48.05 GB/s\nclos-thread[1]</title><rect class="bar clos" x="172.00" y="215.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="176.00" y="223.50">9</text></g><g class="task" tabindex="0" data-task-id="209" data-flow="1->8" data-slot="clos-thread[1]" data-start="114.877920 us" data-end="138.490800 us" data-duration="23.612880 us" data-size="1118481 B" data-throughput="378.939 Gbps / 47.367 GB/s"><title>task 209: 1-&gt;8\n114.878us - 138.491us\n1118481 bytes\n47.37 GB/s\nclos-thread[1]</title><rect class="bar clos" x="984.91" y="215.00" width="167.09" height="11" rx="2" /><text class="bar-label" x="988.91" y="223.50">8</text></g><rect class="row-bg" x="0" y="240.00" width="1180" height="24.00" /><text class="row-label" x="16" y="256.00">clos-thread[2]</text><text class="row-meta" x="124" y="256.00">2 task</text><g class="task" tabindex="0" data-task-id="81" data-flow="1->5" data-slot="clos-thread[2]" data-start="0.000000 us" data-end="34.294280 us" data-duration="34.294280 us" data-size="1118481 B" data-throughput="260.914 Gbps / 32.614 GB/s"><title>task 81: 1-&gt;5\n0.000us - 34.294us\n1118481 bytes\n32.61 GB/s\nclos-thread[2]</title><rect class="bar clos" x="172.00" y="247.00" width="242.68" height="11" rx="2" /><text class="bar-label" x="176.00" y="255.50">5</text></g><g class="task" tabindex="0" data-task-id="225" data-flow="1->4" data-slot="clos-thread[2]" data-start="46.551540 us" data-end="69.828520 us" data-duration="23.276980 us" data-size="1118481 B" data-throughput="384.408 Gbps / 48.051 GB/s"><title>task 225: 1-&gt;4\n46.552us - 69.829us\n1118481 bytes\n48.05 GB/s\nclos-thread[2]</title><rect class="bar clos" x="501.41" y="247.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="505.41" y="255.50">4</text></g><rect class="row-bg" x="0" y="272.00" width="1180" height="24.00" /><text class="row-label" x="16" y="288.00">clos-thread[3]</text><text class="row-meta" x="124" y="288.00">1 task</text><g class="task" tabindex="0" data-task-id="97" data-flow="1->14" data-slot="clos-thread[3]" data-start="0.000000 us" data-end="23.275740 us" data-duration="23.275740 us" data-size="1118481 B" data-throughput="384.428 Gbps / 48.054 GB/s"><title>task 97: 1-&gt;14\n0.000us - 23.276us\n1118481 bytes\n48.05 GB/s\nclos-thread[3]</title><rect class="bar clos" x="172.00" y="279.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="176.00" y="287.50">14</text></g><rect class="row-bg" x="0" y="304.00" width="1180" height="24.00" /><text class="row-label" x="16" y="320.00">clos-thread[4]</text><text class="row-meta" x="124" y="320.00">1 task</text><g class="task" tabindex="0" data-task-id="113" data-flow="1->10" data-slot="clos-thread[4]" data-start="23.275740 us" data-end="46.551540 us" data-duration="23.275800 us" data-size="1118481 B" data-throughput="384.427 Gbps / 48.053 GB/s"><title>task 113: 1-&gt;10\n23.276us - 46.552us\n1118481 bytes\n48.05 GB/s\nclos-thread[4]</title><rect class="bar clos" x="336.71" y="311.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="340.71" y="319.50">10</text></g><rect class="row-bg" x="0" y="336.00" width="1180" height="24.00" /><text class="row-label" x="16" y="352.00">clos-thread[5]</text><text class="row-meta" x="124" y="352.00">1 task</text><g class="task" tabindex="0" data-task-id="129" data-flow="1->6" data-slot="clos-thread[5]" data-start="23.275740 us" data-end="46.552720 us" data-duration="23.276980 us" data-size="1118481 B" data-throughput="384.408 Gbps / 48.051 GB/s"><title>task 129: 1-&gt;6\n23.276us - 46.553us\n1118481 bytes\n48.05 GB/s\nclos-thread[5]</title><rect class="bar clos" x="336.71" y="343.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="340.71" y="351.50">6</text></g><rect class="row-bg" x="0" y="368.00" width="1180" height="24.00" /><text class="row-label" x="16" y="384.00">clos-thread[6]</text><text class="row-meta" x="124" y="384.00">1 task</text><g class="task" tabindex="0" data-task-id="145" data-flow="1->15" data-slot="clos-thread[6]" data-start="34.294280 us" data-end="114.877920 us" data-duration="80.583640 us" data-size="1118481 B" data-throughput="111.038 Gbps / 13.880 GB/s"><title>task 145: 1-&gt;15\n34.294us - 114.878us\n1118481 bytes\n13.88 GB/s\nclos-thread[6]</title><rect class="bar clos" x="414.68" y="375.00" width="570.23" height="11" rx="2" /><text class="bar-label" x="418.68" y="383.50">15</text></g><rect class="row-bg" x="0" y="400.00" width="1180" height="24.00" /><text class="row-label" x="16" y="416.00">clos-thread[7]</text><text class="row-meta" x="124" y="416.00">1 task</text><g class="task" tabindex="0" data-task-id="161" data-flow="1->11" data-slot="clos-thread[7]" data-start="23.275740 us" data-end="46.551540 us" data-duration="23.275800 us" data-size="1118481 B" data-throughput="384.427 Gbps / 48.053 GB/s"><title>task 161: 1-&gt;11\n23.276us - 46.552us\n1118481 bytes\n48.05 GB/s\nclos-thread[7]</title><rect class="bar clos" x="336.71" y="407.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="340.71" y="415.50">11</text></g><rect class="row-bg" x="0" y="432.00" width="1180" height="24.00" /><text class="row-label" x="16" y="448.00">clos-thread[8]</text><text class="row-meta" x="124" y="448.00">1 task</text><g class="task" tabindex="0" data-task-id="177" data-flow="1->7" data-slot="clos-thread[8]" data-start="46.551540 us" data-end="69.828520 us" data-duration="23.276980 us" data-size="1118481 B" data-throughput="384.408 Gbps / 48.051 GB/s"><title>task 177: 1-&gt;7\n46.552us - 69.829us\n1118481 bytes\n48.05 GB/s\nclos-thread[8]</title><rect class="bar clos" x="501.41" y="439.00" width="164.71" height="11" rx="2" /><text class="bar-label" x="505.41" y="447.50">7</text></g>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><span class="swatch" style="background:#0f766e"></span>mesh 组内 task</span>
+    <span><span class="swatch" style="background:#2563eb"></span>clos 跨组 task</span>
+  </div>
+  <section class="details" aria-live="polite">
+    <h2>Task detail</h2>
+    <div class="detail-grid" id="detail-grid">
+      <div class="detail-item"><div class="detail-label">选择</div><div class="detail-value">点击上方任意条形流</div></div>
+    </div>
+  </section>
+</main>
+<script>
+  const detailGrid = document.getElementById('detail-grid');
+  const fields = [
+    ['taskId', 'Task'],
+    ['flow', 'Flow'],
+    ['slot', 'Slot'],
+    ['start', 'Start'],
+    ['end', 'End'],
+    ['duration', 'Duration'],
+    ['size', 'Data'],
+    ['throughput', 'Throughput'],
+  ];
+  function selectTask(node) {
+    document.querySelectorAll('.task.selected').forEach((el) => el.classList.remove('selected'));
+    node.classList.add('selected');
+    detailGrid.innerHTML = fields.map(([key, label]) => {
+      const value = node.dataset[key] || '-';
+      return `<div class="detail-item"><div class="detail-label">${label}</div><div class="detail-value">${value}</div></div>`;
+    }).join('');
+  }
+  document.querySelectorAll('.task').forEach((node) => {
+    node.addEventListener('click', () => selectTask(node));
+    node.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectTask(node);
+      }
+    });
+  });
+</script>
+</body>
+</html>
