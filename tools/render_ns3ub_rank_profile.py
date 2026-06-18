@@ -357,7 +357,7 @@ def main() -> int:
     parser.add_argument(
         "--source-case",
         type=Path,
-        default=Path("experiments/topologies/ubx16/generated_topology_ubx16"),
+        help="Optional full-topology source case used to infer clos channel count.",
     )
     parser.add_argument("--clos-channels", type=int)
     parser.add_argument("--priority", type=int, default=7)
@@ -365,10 +365,17 @@ def main() -> int:
     args = parser.parse_args()
 
     case_dir = args.case_dir.resolve()
-    source_case = args.source_case.resolve()
     clos_channels = args.clos_channels
     if clos_channels is None:
-        clos_channels = infer_inter_channel_count(source_case, args.rank_count, args.group_size, args.priority)
+        if args.source_case is not None:
+            clos_channels = infer_inter_channel_count(
+                args.source_case.resolve(),
+                args.rank_count,
+                args.group_size,
+                args.priority,
+            )
+        else:
+            clos_channels = args.group_size
 
     tasks = load_rank_tasks(case_dir, args.rank, args.rank_count, args.group_size, clos_channels, args.priority)
     if not tasks:

@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV 等差不均衡扫描</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; --blue:#2563eb; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1180px, calc(100% - 36px)); margin:26px auto 48px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
+    p { margin:8px 0; }
+    section, .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; line-height:1.2; }
+    .layout { display:grid; gap:14px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
+    th, td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align:left; }
+    th { color:var(--muted); font-size:12px; background:#fbfcfe; }
+    tr:last-child td { border-bottom:0; }
+    a { color:var(--blue); text-decoration:none; font-weight:650; }
+    a:hover { text-decoration:underline; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    ul { margin:8px 0 0 18px; padding:0; }
+    li { margin:5px 0; }
+    @media (max-width:900px) { .metrics { grid-template-columns:1fr; } table { font-size:12px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV 等差不均衡扫描</h1>
+    <p class="muted">每 rank 总发送量固定为 128MiB，15 条 peer 流按环形 offset 形成等差数列。扫描参数是最大流 / 平均流：1.0、1.2、1.5、2.0。目的 rank 总量保持均衡，所以这里主要观察单 src 的 peer 粒度不均衡。</p>
+  </header>
+
+  <div class="metrics">
+    <div class="metric"><span>baseline 1.0→2.0 劣化</span><strong>17.0%</strong></div>
+    <div class="metric"><span>matrix 1.0→2.0 劣化</span><strong class="bad">45.3%</strong></div>
+    <div class="metric"><span>V3 1.0→2.0 劣化</span><strong class="bad">52.4%</strong></div>
+    <div class="metric"><span>2.0x 最大单流</span><strong>17.07 MiB</strong></div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <h2>结论</h2>
+      <ul>
+        <li>均匀时 Matrix/V3 略优于 baseline：baseline 为 3827.21 GB/s，V3 为 3857.14 GB/s。</li>
+        <li>当最大 peer 流达到平均流 1.2x，baseline 仍为 3675.09 GB/s，但 V3 降到 3184.67 GB/s，开始明显低于 baseline。</li>
+        <li>2.0x 时 baseline 为 3177.57 GB/s，V3 为 1837.07 GB/s；V3 相对 baseline 低 42.2%。</li>
+        <li>这说明固定平面/单 TP 的优化算法适合均匀 AllToAll；对 AllToAllV，如果单 peer 流变大，热点流会拖尾，需要进一步做大流切分或 size-aware 平面分配。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>趋势汇总</h2>
+      <table>
+        <thead><tr><th>max/avg</th><th>pair CV</th><th>Baseline GB/s</th><th>Matrix GB/s</th><th>V3 GB/s</th><th>Matrix vs baseline</th><th>V3 vs baseline</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1.0x</td>
+            <td>0.000</td>
+            <td>3827.21</td>
+            <td>3857.25</td>
+            <td>3857.14</td>
+            <td class="good">+0.8%</td>
+            <td class="good">+0.8%</td>
+          </tr>
+          <tr>
+            <td>1.2x</td>
+            <td>0.123</td>
+            <td>3675.09</td>
+            <td>3340.09</td>
+            <td>3184.67</td>
+            <td class="bad">-9.1%</td>
+            <td class="bad">-13.3%</td>
+          </tr>
+          <tr>
+            <td>1.5x</td>
+            <td>0.309</td>
+            <td>3477.52</td>
+            <td>2727.40</td>
+            <td>2444.31</td>
+            <td class="bad">-21.6%</td>
+            <td class="bad">-29.7%</td>
+          </tr>
+          <tr>
+            <td>2.0x</td>
+            <td>0.617</td>
+            <td>3177.57</td>
+            <td>2109.83</td>
+            <td>1837.07</td>
+            <td class="bad">-33.6%</td>
+            <td class="bad">-42.2%</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>完整结果</h2>
+      <table>
+        <thead>
+          <tr><th>max/avg</th><th>算法</th><th>min MiB</th><th>avg MiB</th><th>max MiB</th><th>pair CV</th><th>dst CV</th><th>跨组占比</th><th>us</th><th>GB/s</th><th>vs baseline</th><th>Profile</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1.0x</td>
+            <td>Baseline Mesh1D full-TP</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>0.000</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>561.109</td>
+            <td>3827.21</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p0x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.0x</td>
+            <td>Matrix strict</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>0.000</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>556.739</td>
+            <td>3857.25</td>
+            <td class="good">+0.8%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p0x-matrix-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.0x</td>
+            <td>MeshClos V3 strict</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>0.000</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>556.755</td>
+            <td>3857.14</td>
+            <td class="good">+0.8%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p0x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.2x</td>
+            <td>Baseline Mesh1D full-TP</td>
+            <td>6.83</td>
+            <td>8.53</td>
+            <td>10.24</td>
+            <td>0.123</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>584.334</td>
+            <td>3675.09</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p2x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.2x</td>
+            <td>Matrix strict</td>
+            <td>6.83</td>
+            <td>8.53</td>
+            <td>10.24</td>
+            <td>0.123</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>642.941</td>
+            <td>3340.09</td>
+            <td class="bad">-9.1%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p2x-matrix-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.2x</td>
+            <td>MeshClos V3 strict</td>
+            <td>6.83</td>
+            <td>8.53</td>
+            <td>10.24</td>
+            <td>0.123</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>674.319</td>
+            <td>3184.67</td>
+            <td class="bad">-13.3%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p2x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.5x</td>
+            <td>Baseline Mesh1D full-TP</td>
+            <td>4.27</td>
+            <td>8.53</td>
+            <td>12.80</td>
+            <td>0.309</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>617.533</td>
+            <td>3477.52</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p5x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.5x</td>
+            <td>Matrix strict</td>
+            <td>4.27</td>
+            <td>8.53</td>
+            <td>12.80</td>
+            <td>0.309</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>787.375</td>
+            <td>2727.40</td>
+            <td class="bad">-21.6%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p5x-matrix-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.5x</td>
+            <td>MeshClos V3 strict</td>
+            <td>4.27</td>
+            <td>8.53</td>
+            <td>12.80</td>
+            <td>0.309</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>878.563</td>
+            <td>2444.31</td>
+            <td class="bad">-29.7%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max1p5x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>2.0x</td>
+            <td>Baseline Mesh1D full-TP</td>
+            <td>0.00</td>
+            <td>8.53</td>
+            <td>17.07</td>
+            <td>0.617</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>675.825</td>
+            <td>3177.57</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max2p0x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>2.0x</td>
+            <td>Matrix strict</td>
+            <td>0.00</td>
+            <td>8.53</td>
+            <td>17.07</td>
+            <td>0.617</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>1017.845</td>
+            <td>2109.83</td>
+            <td class="bad">-33.6%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max2p0x-matrix-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>2.0x</td>
+            <td>MeshClos V3 strict</td>
+            <td>0.00</td>
+            <td>8.53</td>
+            <td>17.07</td>
+            <td>0.617</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>1168.972</td>
+            <td>1837.07</td>
+            <td class="bad">-42.2%</td>
+            <td><a href="ns3ub-ubx16-a2av-gradient-max2p0x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>说明</h2>
+      <ul>
+        <li><code>pair CV</code> 是所有 src-dst peer 流大小的变异系数；本实验每个源 rank 的形状相同，所以它等价于 rank0 出流的 CV。</li>
+        <li><code>dst CV</code> 约为 0，说明目的 rank 总接收量被刻意保持均衡，避免目的热点干扰判断。</li>
+        <li>2.0x 场景的理论最小值会接近 0；生成器强制所有 task 至少 1 byte，以避免 0-byte task 干扰 ns-3 调度。</li>
+      </ul>
+    </section>
+  </div>
+</main>
+</body>
+</html>

@@ -308,19 +308,25 @@ def patch_network_attributes(path: Path, enable_port_trace: bool, disable_packet
     lines = path.read_text().splitlines()
     patched: list[str] = []
     seen_port = False
-    seen_packet = False
+    seen_packet_trace = False
+    seen_record_packet = False
     for line in lines:
         if line.startswith('global UB_PORT_TRACE_ENABLE '):
             patched.append(f'global UB_PORT_TRACE_ENABLE "{str(enable_port_trace).lower()}"')
             seen_port = True
+        elif line.startswith('global UB_PACKET_TRACE_ENABLE ') and disable_packet_trace:
+            patched.append('global UB_PACKET_TRACE_ENABLE "false"')
+            seen_packet_trace = True
         elif line.startswith('global UB_RECORD_PKT_TRACE ') and disable_packet_trace:
             patched.append('global UB_RECORD_PKT_TRACE "false"')
-            seen_packet = True
+            seen_record_packet = True
         else:
             patched.append(line)
     if not seen_port:
         patched.append(f'global UB_PORT_TRACE_ENABLE "{str(enable_port_trace).lower()}"')
-    if disable_packet_trace and not seen_packet:
+    if disable_packet_trace and not seen_packet_trace:
+        patched.append('global UB_PACKET_TRACE_ENABLE "false"')
+    if disable_packet_trace and not seen_record_packet:
         patched.append('global UB_RECORD_PKT_TRACE "false"')
     path.write_text("\n".join(patched) + "\n")
 
@@ -341,7 +347,9 @@ def main() -> int:
     parser.add_argument("--priority", type=int, default=7)
     parser.add_argument("--phase-delay", default="0ns")
     parser.add_argument("--disable-packet-trace", action="store_true", default=True)
-    parser.add_argument("--no-port-trace", action="store_true")
+    parser.add_argument("--port-trace", dest="port_trace", action="store_true", help="Enable port-level trace output.")
+    parser.add_argument("--no-port-trace", dest="port_trace", action="store_false", help="Disable port-level trace output.")
+    parser.set_defaults(port_trace=False)
     args = parser.parse_args()
 
     source_case = args.source_case.resolve()
@@ -376,7 +384,7 @@ def main() -> int:
     )
     patch_network_attributes(
         output_case / "network_attribute.txt",
-        enable_port_trace=not args.no_port_trace,
+        enable_port_trace=args.port_trace,
         disable_packet_trace=args.disable_packet_trace,
     )
 

@@ -6,9 +6,9 @@
   <title>POD64 AllToAll 仿真报告</title>
   <style>
     :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --blue:#2563eb; }
-    * { box-sizing: border-box; }
+    * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    main { width:min(1120px, calc(100% - 36px)); margin:26px auto 48px; }
+    main { width:min(1160px, calc(100% - 36px)); margin:26px auto 48px; }
     h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
     h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
     p { margin:8px 0; }
@@ -21,11 +21,17 @@
     table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
     th, td { border-bottom:1px solid var(--line); padding:8px 9px; text-align:right; white-space:nowrap; }
     th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align:left; }
+    th:first-child, td:first-child { width:170px; }
+    th:nth-child(2), td:nth-child(2) { width:300px; white-space:normal; }
+    th:nth-child(3), td:nth-child(3) { width:76px; }
+    th:nth-child(4), td:nth-child(4), th:nth-child(5), td:nth-child(5), th:nth-child(6), td:nth-child(6) { width:110px; }
+    th:nth-child(7), td:nth-child(7) { width:70px; }
     th { color:var(--muted); font-size:12px; background:#fbfcfe; }
     tr:last-child td { border-bottom:0; }
     a { color:var(--blue); text-decoration:none; font-weight:650; }
     a:hover { text-decoration:underline; }
     code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    td:nth-child(2) code { white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
     .good { color:var(--good); }
     ul { margin:8px 0 0 18px; padding:0; }
     li { margin:5px 0; }
@@ -36,25 +42,31 @@
 <main>
   <header>
     <h1>POD64 AllToAll 仿真报告</h1>
-    <p class="muted">拓扑为 64 rank，每 8 rank 一组；每卡 8 个 clos 平面端口和 7 个组内 mesh 直连端口。数据量为 16MiB/rank。</p>
+    <p class="muted">拓扑为 64 rank，每 8 rank 一组；每卡 8 个 clos 平面端口和 7 个组内 mesh 直连端口。覆盖 16/64/128/256/512/1024MiB/rank，所有大包 case 使用 MTP 并关闭 port/packet trace，仅保留 task trace 用于 profiling。</p>
   </header>
 
   <div class="metrics">
-    <div class="metric"><span>最佳全局吞吐</span><strong>15053.48 GB/s</strong></div>
-    <div class="metric"><span>最佳算法</span><strong>MeshClos V3 strict</strong></div>
-    <div class="metric"><span>相对 baseline</span><strong class="good">+31.41%</strong></div>
-    <div class="metric"><span>任务数</span><strong>4032</strong></div>
+    <div class="metric"><span>最佳全局吞吐</span><strong>27665.39 GB/s</strong></div>
+    <div class="metric"><span>最佳算法/数据量</span><strong>MeshClos V3 strict step-barrier 1024MiB</strong></div>
+    <div class="metric"><span>V3 step 1024MiB 单卡</span><strong class="good">432.75 GB/s</strong></div>
+    <div class="metric"><span>V3 step 理论达成率</span><strong class="good">96.1% / 96.2%</strong></div>
   </div>
 
   <div class="layout">
     <section>
-      <h2>结果</h2>
+      <h2>结论</h2>
+      <ul>
+        <li>V3 strict step-barrier 是这组实验里最接近网络上限的口径：1024MiB/rank 全局 27665.39 GB/s，rank0 432.75 GB/s。</li>
+        <li>按 POD64 均匀 AllToAll direct payload 理论上限估算，全局上限约 28800 GB/s，单卡上限约 450 GB/s；V3 step 1024MiB 达成 96.1% / 96.2%。</li>
+        <li>baseline phase-barrier 1024MiB/rank 为 23806.67 GB/s，V3 step 相对它提升 16.2%。</li>
+        <li>V3 step 从 256MiB 到 1024MiB 仍有小幅增长：27203.62 → 27463.07 → 27665.39 GB/s，说明大包下趋于平台但 512MiB 还未完全饱和。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>结果：16MiB/rank</h2>
       <table>
-        <thead>
-          <tr>
-            <th>算法</th><th>Case</th><th>TP rows</th><th>Makespan(us)</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Profile</th>
-          </tr>
-        </thead>
+        <thead><tr><th>算法</th><th>Case</th><th>TP rows</th><th>Makespan(us)</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Profile</th></tr></thead>
         <tbody>
           <tr>
             <td>baseline full-TP</td>
@@ -63,10 +75,22 @@
             <td><a href="ns3ub-pod64-baseline-threadserial-a2a64-16mb-rank0-profile.html">rank0</a></td>
           </tr>
           <tr>
+            <td>baseline full-TP phase-barrier</td>
+            <td><code>generated_topology_pod64_hccl_baseline_phasebarrier_a2a64_16mb</code></td>
+            <td>16352</td><td>95.348160</td><td>11261.27</td><td>176.29</td>
+            <td><a href="ns3ub-pod64-baseline-phasebarrier-a2a64-16mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
             <td>matrix strict</td>
             <td><code>generated_topology_pod64_hccl_matrix_strict_threadserial_a2a64_16mb</code></td>
             <td>2016</td><td>80.702060</td><td>13305.01</td><td>297.06</td>
             <td><a href="ns3ub-pod64-matrix-strict-threadserial-a2a64-16mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict round-barrier</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_roundbarrier_a2a64_16mb</code></td>
+            <td>2016</td><td>44.448600</td><td>24156.93</td><td>378.88</td>
+            <td><a href="ns3ub-pod64-matrix-strict-roundbarrier-a2a64-16mb-rank0-profile.html">rank0</a></td>
           </tr>
           <tr>
             <td>MeshClos V3 strict</td>
@@ -74,17 +98,271 @@
             <td>2016</td><td>71.328480</td><td>15053.48</td><td>271.13</td>
             <td><a href="ns3ub-pod64-v3-strict-threadserial-a2a64-16mb-rank0-profile.html">rank0</a></td>
           </tr>
+          <tr>
+            <td>MeshClos V3 strict step-barrier</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_stepbarrier_a2a64_16mb</code></td>
+            <td>2016</td><td>44.596040</td><td>24077.07</td><td>377.09</td>
+            <td><a href="ns3ub-pod64-v3-strict-stepbarrier-a2a64-16mb-rank0-profile.html">rank0</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>结果：64MiB/rank</h2>
+      <table>
+        <thead><tr><th>算法</th><th>Case</th><th>TP rows</th><th>Makespan(us)</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Profile</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>baseline full-TP</td>
+            <td><code>generated_topology_pod64_hccl_baseline_threadserial_a2a64_64mb</code></td>
+            <td>16352</td><td>190.524460</td><td>22542.87</td><td>354.66</td>
+            <td><a href="ns3ub-pod64-baseline-threadserial-a2a64-64mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>baseline full-TP phase-barrier</td>
+            <td><code>generated_topology_pod64_hccl_baseline_phasebarrier_a2a64_64mb</code></td>
+            <td>16352</td><td>189.438080</td><td>22672.14</td><td>356.15</td>
+            <td><a href="ns3ub-pod64-baseline-phasebarrier-a2a64-64mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_threadserial_a2a64_64mb</code></td>
+            <td>2016</td><td>320.781040</td><td>13389.09</td><td>306.43</td>
+            <td><a href="ns3ub-pod64-matrix-strict-threadserial-a2a64-64mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict round-barrier</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_roundbarrier_a2a64_64mb</code></td>
+            <td>2016</td><td>162.617220</td><td>26411.52</td><td>413.79</td>
+            <td><a href="ns3ub-pod64-matrix-strict-roundbarrier-a2a64-64mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_threadserial_a2a64_64mb</code></td>
+            <td>2016</td><td>240.090240</td><td>17888.97</td><td>314.83</td>
+            <td><a href="ns3ub-pod64-v3-strict-threadserial-a2a64-64mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict step-barrier</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_stepbarrier_a2a64_64mb</code></td>
+            <td>2016</td><td>164.170020</td><td>26161.70</td><td>409.55</td>
+            <td><a href="ns3ub-pod64-v3-strict-stepbarrier-a2a64-64mb-rank0-profile.html">rank0</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>结果：128MiB/rank</h2>
+      <table>
+        <thead><tr><th>算法</th><th>Case</th><th>TP rows</th><th>Makespan(us)</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Profile</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>baseline full-TP</td>
+            <td><code>generated_topology_pod64_hccl_baseline_threadserial_a2a64_128mb</code></td>
+            <td>16352</td><td>362.207680</td><td>23715.50</td><td>374.17</td>
+            <td><a href="ns3ub-pod64-baseline-threadserial-a2a64-128mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>baseline full-TP phase-barrier</td>
+            <td><code>generated_topology_pod64_hccl_baseline_phasebarrier_a2a64_128mb</code></td>
+            <td>16352</td><td>364.354720</td><td>23575.75</td><td>371.49</td>
+            <td><a href="ns3ub-pod64-baseline-phasebarrier-a2a64-128mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_threadserial_a2a64_128mb</code></td>
+            <td>2016</td><td>595.123740</td><td>14433.86</td><td>298.74</td>
+            <td><a href="ns3ub-pod64-matrix-strict-threadserial-a2a64-128mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict round-barrier</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_roundbarrier_a2a64_128mb</code></td>
+            <td>2016</td><td>319.560620</td><td>26880.45</td><td>420.90</td>
+            <td><a href="ns3ub-pod64-matrix-strict-roundbarrier-a2a64-128mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_threadserial_a2a64_128mb</code></td>
+            <td>2016</td><td>479.937540</td><td>17898.03</td><td>311.77</td>
+            <td><a href="ns3ub-pod64-v3-strict-threadserial-a2a64-128mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict step-barrier</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_stepbarrier_a2a64_128mb</code></td>
+            <td>2016</td><td>319.073240</td><td>26921.51</td><td>421.24</td>
+            <td><a href="ns3ub-pod64-v3-strict-stepbarrier-a2a64-128mb-rank0-profile.html">rank0</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>结果：256MiB/rank</h2>
+      <table>
+        <thead><tr><th>算法</th><th>Case</th><th>TP rows</th><th>Makespan(us)</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Profile</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>baseline full-TP</td>
+            <td><code>generated_topology_pod64_hccl_baseline_threadserial_a2a64_256mb</code></td>
+            <td>16352</td><td>709.204860</td><td>24224.13</td><td>387.43</td>
+            <td><a href="ns3ub-pod64-baseline-threadserial-a2a64-256mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>baseline full-TP phase-barrier</td>
+            <td><code>generated_topology_pod64_hccl_baseline_phasebarrier_a2a64_256mb</code></td>
+            <td>16352</td><td>744.311020</td><td>23081.57</td><td>369.53</td>
+            <td><a href="ns3ub-pod64-baseline-phasebarrier-a2a64-256mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_threadserial_a2a64_256mb</code></td>
+            <td>2016</td><td>1115.206340</td><td>15405.10</td><td>291.16</td>
+            <td><a href="ns3ub-pod64-matrix-strict-threadserial-a2a64-256mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict round-barrier</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_roundbarrier_a2a64_256mb</code></td>
+            <td>2016</td><td>632.230520</td><td>27173.43</td><td>425.10</td>
+            <td><a href="ns3ub-pod64-matrix-strict-roundbarrier-a2a64-256mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_threadserial_a2a64_256mb</code></td>
+            <td>2016</td><td>946.533300</td><td>18150.31</td><td>316.68</td>
+            <td><a href="ns3ub-pod64-v3-strict-threadserial-a2a64-256mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict step-barrier</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_stepbarrier_a2a64_256mb</code></td>
+            <td>2016</td><td>631.528780</td><td>27203.62</td><td>425.47</td>
+            <td><a href="ns3ub-pod64-v3-strict-stepbarrier-a2a64-256mb-rank0-profile.html">rank0</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>结果：512MiB/rank</h2>
+      <table>
+        <thead><tr><th>算法</th><th>Case</th><th>TP rows</th><th>Makespan(us)</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Profile</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>baseline full-TP</td>
+            <td><code>generated_topology_pod64_hccl_baseline_threadserial_a2a64_512mb</code></td>
+            <td>16352</td><td>1523.070800</td><td>22559.51</td><td>368.81</td>
+            <td><a href="ns3ub-pod64-baseline-threadserial-a2a64-512mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>baseline full-TP phase-barrier</td>
+            <td><code>generated_topology_pod64_hccl_baseline_phasebarrier_a2a64_512mb</code></td>
+            <td>16352</td><td>1444.564340</td><td>23785.54</td><td>372.29</td>
+            <td><a href="ns3ub-pod64-baseline-phasebarrier-a2a64-512mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_threadserial_a2a64_512mb</code></td>
+            <td>2016</td><td>2476.414380</td><td>13874.79</td><td>270.97</td>
+            <td><a href="ns3ub-pod64-matrix-strict-threadserial-a2a64-512mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict round-barrier</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_roundbarrier_a2a64_512mb</code></td>
+            <td>2016</td><td>1332.747880</td><td>25781.12</td><td>405.31</td>
+            <td><a href="ns3ub-pod64-matrix-strict-roundbarrier-a2a64-512mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_threadserial_a2a64_512mb</code></td>
+            <td>2016</td><td>1954.688340</td><td>17578.12</td><td>319.29</td>
+            <td><a href="ns3ub-pod64-v3-strict-threadserial-a2a64-512mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict step-barrier</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_stepbarrier_a2a64_512mb</code></td>
+            <td>2016</td><td>1251.125180</td><td>27463.07</td><td>429.64</td>
+            <td><a href="ns3ub-pod64-v3-strict-stepbarrier-a2a64-512mb-rank0-profile.html">rank0</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>结果：1024MiB/rank</h2>
+      <table>
+        <thead><tr><th>算法</th><th>Case</th><th>TP rows</th><th>Makespan(us)</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Profile</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>baseline full-TP</td>
+            <td><code>generated_topology_pod64_hccl_baseline_threadserial_a2a64_1024mb</code></td>
+            <td>16352</td><td>3105.937660</td><td>22125.20</td><td>355.05</td>
+            <td><a href="ns3ub-pod64-baseline-threadserial-a2a64-1024mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>baseline full-TP phase-barrier</td>
+            <td><code>generated_topology_pod64_hccl_baseline_phasebarrier_a2a64_1024mb</code></td>
+            <td>16352</td><td>2886.564440</td><td>23806.67</td><td>375.63</td>
+            <td><a href="ns3ub-pod64-baseline-phasebarrier-a2a64-1024mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_threadserial_a2a64_1024mb</code></td>
+            <td>2016</td><td>4889.519240</td><td>14054.44</td><td>233.90</td>
+            <td><a href="ns3ub-pod64-matrix-strict-threadserial-a2a64-1024mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>matrix strict round-barrier</td>
+            <td><code>generated_topology_pod64_hccl_matrix_strict_roundbarrier_a2a64_1024mb</code></td>
+            <td>2016</td><td>3152.185820</td><td>21800.58</td><td>344.41</td>
+            <td><a href="ns3ub-pod64-matrix-strict-roundbarrier-a2a64-1024mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_threadserial_a2a64_1024mb</code></td>
+            <td>2016</td><td>3986.795740</td><td>17236.77</td><td>301.49</td>
+            <td><a href="ns3ub-pod64-v3-strict-threadserial-a2a64-1024mb-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>MeshClos V3 strict step-barrier</td>
+            <td><code>generated_topology_pod64_hccl_meshclos2d_v3_strict_stepbarrier_a2a64_1024mb</code></td>
+            <td>2016</td><td>2483.951540</td><td>27665.39</td><td>432.75</td>
+            <td><a href="ns3ub-pod64-v3-strict-stepbarrier-a2a64-1024mb-rank0-profile.html">rank0</a></td>
+          </tr>
         </tbody>
       </table>
     </section>
 
     <section>
-      <h2>建模说明</h2>
+      <h2>稳定区间对照</h2>
+      <table>
+        <thead><tr><th>算法</th><th>MiB/rank</th><th>Global GB/s</th><th>Rank0 GB/s</th><th>Global 达成率</th><th>Rank0 达成率</th></tr></thead>
+        <tbody>
+          <tr><td>baseline full-TP phase-barrier</td><td>16</td><td>11261.27</td><td>176.29</td><td>39.1%</td><td>39.2%</td></tr>
+<tr><td>baseline full-TP phase-barrier</td><td>64</td><td>22672.14</td><td>356.15</td><td>78.7%</td><td>79.1%</td></tr>
+<tr><td>baseline full-TP phase-barrier</td><td>128</td><td>23575.75</td><td>371.49</td><td>81.9%</td><td>82.6%</td></tr>
+<tr><td>baseline full-TP phase-barrier</td><td>256</td><td>23081.57</td><td>369.53</td><td>80.1%</td><td>82.1%</td></tr>
+<tr><td>baseline full-TP phase-barrier</td><td>512</td><td>23785.54</td><td>372.29</td><td>82.6%</td><td>82.7%</td></tr>
+<tr><td>baseline full-TP phase-barrier</td><td>1024</td><td>23806.67</td><td>375.63</td><td>82.7%</td><td>83.5%</td></tr>
+<tr><td>matrix strict round-barrier</td><td>16</td><td>24156.93</td><td>378.88</td><td>83.9%</td><td>84.2%</td></tr>
+<tr><td>matrix strict round-barrier</td><td>64</td><td>26411.52</td><td>413.79</td><td>91.7%</td><td>92.0%</td></tr>
+<tr><td>matrix strict round-barrier</td><td>128</td><td>26880.45</td><td>420.90</td><td>93.3%</td><td>93.5%</td></tr>
+<tr><td>matrix strict round-barrier</td><td>256</td><td>27173.43</td><td>425.10</td><td>94.4%</td><td>94.5%</td></tr>
+<tr><td>matrix strict round-barrier</td><td>512</td><td>25781.12</td><td>405.31</td><td>89.5%</td><td>90.1%</td></tr>
+<tr><td>matrix strict round-barrier</td><td>1024</td><td>21800.58</td><td>344.41</td><td>75.7%</td><td>76.5%</td></tr>
+<tr><td>MeshClos V3 strict step-barrier</td><td>16</td><td>24077.07</td><td>377.09</td><td>83.6%</td><td>83.8%</td></tr>
+<tr><td>MeshClos V3 strict step-barrier</td><td>64</td><td>26161.70</td><td>409.55</td><td>90.8%</td><td>91.0%</td></tr>
+<tr><td>MeshClos V3 strict step-barrier</td><td>128</td><td>26921.51</td><td>421.24</td><td>93.5%</td><td>93.6%</td></tr>
+<tr><td>MeshClos V3 strict step-barrier</td><td>256</td><td>27203.62</td><td>425.47</td><td>94.5%</td><td>94.5%</td></tr>
+<tr><td>MeshClos V3 strict step-barrier</td><td>512</td><td>27463.07</td><td>429.64</td><td>95.4%</td><td>95.5%</td></tr>
+<tr><td>MeshClos V3 strict step-barrier</td><td>1024</td><td>27665.39</td><td>432.75</td><td>96.1%</td><td>96.2%</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>建模口径</h2>
       <ul>
-        <li>baseline 使用当前 HCCL Mesh1D：<code>concurrent=16</code>、thread-serial、full TP。</li>
-        <li>matrix strict 使用 8x8 matrix 调度；组内 slot 走 host-host 直连 mesh，跨组 slot 绑定 8 个 clos 平面之一。</li>
-        <li>MeshClos V3 strict 使用 <code>group-size=8</code>；组内任务走直连 mesh，跨组任务按 V3 shift/link 映射到固定 clos 平面。</li>
-        <li>POD64 的 transport channel 里组内 pair 同时存在 8 条 clos 路径和 1 条 direct mesh 路径；生成脚本已显式从 <code>topology.csv</code> 识别 host-host 直连端口，避免 strict 模式误选 clos。</li>
+        <li>baseline：HCCL Mesh1D，<code>concurrent=16</code>，full-TP；phase-barrier 是同步对照。</li>
+        <li>matrix strict：8x8 matrix 调度，组内 slot 走 mesh，跨组 slot 走固定 clos 平面；round-barrier 是同步对照。</li>
+        <li>MeshClos V3 strict：<code>group-size=8</code>，8 个 clos 平面；组内任务走直连 mesh，跨组任务按 V3 shift/link 映射到固定平面。</li>
+        <li>MeshClos V3 strict step-barrier：诊断对照。Mesh2D 任务保持并发，只强制每个 MeshClos 逻辑 step 全局完成后再进入下一 step。</li>
+        <li>完整数据见 <code>ns3ub-pod64-alltoall-summary.csv</code>；每个 profile 链接展示 rank0 的 task 级开始/结束时间、数据量和带宽。</li>
       </ul>
     </section>
   </div>

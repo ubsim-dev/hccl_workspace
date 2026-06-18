@@ -13,7 +13,8 @@ Traffic is emitted in V3 logical order. By default all tasks stay in one ns-3
 phase because the V3 executor has one stage and the per-link step loop is not a
 proven global barrier. Use --dependency-mode v3-thread-serial to model each
 algorithm thread/channel as a serial queue while keeping different threads
-parallel.
+parallel. Use --dependency-mode v3-step-barrier as a diagnostic mode that
+keeps Mesh2D tasks independent and serializes MeshClos logical steps globally.
 """
 
 from __future__ import annotations
@@ -76,19 +77,25 @@ def patch_network_attributes(path: Path, enable_port_trace: bool, disable_packet
     lines = path.read_text().splitlines()
     patched: list[str] = []
     seen_port = False
-    seen_packet = False
+    seen_packet_trace = False
+    seen_record_packet = False
     for line in lines:
         if line.startswith('global UB_PORT_TRACE_ENABLE '):
             patched.append(f'global UB_PORT_TRACE_ENABLE "{str(enable_port_trace).lower()}"')
             seen_port = True
+        elif line.startswith('global UB_PACKET_TRACE_ENABLE ') and disable_packet_trace:
+            patched.append('global UB_PACKET_TRACE_ENABLE "false"')
+            seen_packet_trace = True
         elif line.startswith('global UB_RECORD_PKT_TRACE ') and disable_packet_trace:
             patched.append('global UB_RECORD_PKT_TRACE "false"')
-            seen_packet = True
+            seen_record_packet = True
         else:
             patched.append(line)
     if not seen_port:
         patched.append(f'global UB_PORT_TRACE_ENABLE "{str(enable_port_trace).lower()}"')
-    if disable_packet_trace and not seen_packet:
+    if disable_packet_trace and not seen_packet_trace:
+        patched.append('global UB_PACKET_TRACE_ENABLE "false"')
+    if disable_packet_trace and not seen_record_packet:
         patched.append('global UB_RECORD_PKT_TRACE "false"')
     path.write_text("\n".join(patched) + "\n")
 
@@ -199,6 +206,7 @@ def write_v3_logical_traffic(
         src_alg: int,
         dst_alg: int,
         unit: tuple[str, int, int],
+        barrier_phase: int | None = None,
     ) -> None:
         nonlocal task_id
         key = (src_alg, dst_alg)
@@ -213,6 +221,17 @@ def write_v3_logical_traffic(
             previous = last_task_by_unit.get(unit)
             depend_on = "" if previous is None else str(previous)
             last_task_by_unit[unit] = task_id
+        elif dependency_mode == "v3-step-barrier":
+            if barrier_phase is None:
+                raise ValueError("v3-step-barrier requires a barrier phase")
+            if unit[0] == "mesh":
+                # Mesh tasks use separate host-host ports and are not part of the
+                # MeshClos step-barrier diagnostic.
+                phase_id = task_id
+                depend_on = ""
+            else:
+                phase_id = barrier_phase
+                depend_on = "" if phase_id == mesh_task_count else str(phase_id - 1)
         else:
             raise ValueError(f"unknown dependency_mode {dependency_mode}")
         phases.add(phase_id)
@@ -236,6 +255,7 @@ def write_v3_logical_traffic(
     inter_steps = 0
     if color_round_num > 0:
         inter_steps = (group_size * color_round_num + clos_channel_count - 1) // clos_channel_count
+    mesh_task_count = rank_count * max(group_size - 1, 0)
 
     with output_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=TRAFFIC_HEADER)
@@ -248,7 +268,13 @@ def write_v3_logical_traffic(
                 group_base = (src_alg // group_size) * group_size
                 local_rank = src_alg % group_size
                 dst_alg = group_base + ((local_rank + 1 + neighbor_idx) % group_size)
-                write_row(writer, src_alg, dst_alg, ("mesh", src_alg, neighbor_idx))
+                write_row(
+                    writer,
+                    src_alg,
+                    dst_alg,
+                    ("mesh", src_alg, neighbor_idx),
+                    neighbor_idx,
+                )
 
         # MeshClosV3: for step then linkIdx, each source rank maps to one peer.
         # This is the source algorithm order, but no phase dependency is added.
@@ -271,7 +297,13 @@ def write_v3_logical_traffic(
                     else:
                         connected_local = (my_local + group_size - shift % group_size) % group_size
                     dst_alg = peer_group * group_size + connected_local
-                    write_row(writer, src_alg, dst_alg, ("clos", src_alg, link_idx))
+                    write_row(
+                        writer,
+                        src_alg,
+                        dst_alg,
+                        ("clos", src_alg, link_idx),
+                        mesh_task_count + step,
+                    )
 
     expected = rank_count * (rank_count - 1)
     if task_id != expected:
@@ -461,16 +493,19 @@ def main() -> int:
     )
     parser.add_argument(
         "--dependency-mode",
-        choices=("none", "v3-thread-serial"),
+        choices=("none", "v3-thread-serial", "v3-step-barrier"),
         default="none",
         help="none keeps all generated V3 tasks in one runnable phase; "
         "v3-thread-serial chains tasks on the same source algorithm thread/channel "
-        "using phaseId/dependOnPhases.",
+        "using phaseId/dependOnPhases; v3-step-barrier keeps Mesh2D tasks "
+        "independent and makes each MeshClos step a global barrier.",
     )
     parser.add_argument("--priority", type=int, default=7)
     parser.add_argument("--phase-delay", default="0ns")
     parser.add_argument("--disable-packet-trace", action="store_true", default=True)
-    parser.add_argument("--no-port-trace", action="store_true")
+    parser.add_argument("--port-trace", dest="port_trace", action="store_true", help="Enable port-level trace output.")
+    parser.add_argument("--no-port-trace", dest="port_trace", action="store_false", help="Disable port-level trace output.")
+    parser.set_defaults(port_trace=False)
     args = parser.parse_args()
 
     if args.rank_count % args.group_size != 0:
@@ -531,7 +566,7 @@ def main() -> int:
     )
     patch_network_attributes(
         output_case / "network_attribute.txt",
-        enable_port_trace=not args.no_port_trace,
+        enable_port_trace=args.port_trace,
         disable_packet_trace=args.disable_packet_trace,
     )
 
