@@ -1,6 +1,6 @@
 # UBX16 AllToAll 算法与 ns-3-ub 仿真小结
 
-本文记录当前保留的 3 组 UBX16 AllToAll/AllToAllV 建模结果。仿真拓扑为真实 UBX16 抽象：16 rank，每 4 rank 一个 mesh 组；每张卡有 3 条组内 mesh 直连端口，以及 4 条跨组 clos 平面端口。数据量为 16 MiB/rank，profile 图均展示 rank 0 的任务时间线。
+本文记录当前保留的 3 组 UBX16 AllToAll 建模结果。仿真拓扑为真实 UBX16 抽象：16 rank，每 4 rank 一个 mesh 组；每张卡有 3 条组内 mesh 直连端口，以及 4 条跨组 clos 平面端口。数据量为 16 MiB/rank，profile 图均展示 rank 0 的任务时间线。
 
 ## 结果汇总
 
@@ -29,12 +29,6 @@
 对应 `hccl-xzw` 里的 MeshClos V3 优化算法建模。它把组内 mesh 任务和跨组 clos 任务拆成独立并行单元：rank 0 有 3 个 mesh thread 和 4 个 clos thread。每个 clos thread 串行发送 3 个跨组目标，4 个 clos 平面并发工作。
 
 这个模型下，clos 是主要瓶颈；3 条 mesh 直连只在开头一段时间有任务，完成后基本空闲。最终性能与 HCCL matrix optimized 非常接近，都是单 TP/单平面 strict 口径下约 240 GB/s。
-
-### 历史 4 并发 Mesh1D
-
-之前的 `generated_topology_ubx16_hccl_mesh1d_threadserial_a2a16_16mb` 不是当前 `hccl` baseline，而是对应 `hccl-xzw` 中 `ALLTOALLV_DIRECT_FULLMESH_CONCURRENT_SIZE = 4` 的历史版本。它不是按 UBX 的 1 mesh + 4 clos 平面结构来组织通信，而是用 4 个逻辑并行 slot 分摊 peer。
-
-在当前 UBX16 strict 建模下，这版 rank0 带宽约 188.96 GB/s。它只作为历史参考，不再作为 baseline。
 
 ## 当前结论
 

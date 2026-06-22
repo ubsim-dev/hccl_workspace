@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV Hybrid Cap Step-Barrier 对照</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1120px, calc(100% - 36px)); margin:26px auto 48px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
+    section, .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; line-height:1.2; }
+    .layout { display:grid; gap:14px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
+    th, td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    th:first-child, td:first-child, th:last-child, td:last-child { text-align:left; }
+    th { color:var(--muted); font-size:12px; background:#fbfcfe; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    ul { margin:8px 0 0 18px; padding:0; }
+    li { margin:5px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV Hybrid Cap Step-Barrier 对照</h1>
+    <p class="muted">固定 max/avg=2.0，128MiB/rank。cap 不做 padding。对照 A 阶段使用 v3-thread-serial 与 v3-step-barrier 的差异；B 阶段仍然等待全部 A 完成后启动。</p>
+  </header>
+
+  <div class="metrics">
+    <div class="metric"><span>baseline</span><strong>203.20</strong><span>GB/s per rank</span></div>
+    <div class="metric"><span>pure meshclos / no B</span><strong>125.91</strong><span>-38.0% vs baseline</span></div>
+    <div class="metric"><span>best step-cap</span><strong>201.87</strong><span>-0.7% vs baseline</span></div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <h2>结论</h2>
+      <ul>
+        <li>step-barrier 修正了 cap 不同步时的平面内乱序竞争，所有比例都比 no-step cap 更高。</li>
+        <li>但 A/B 严格同步下，cap 比例越大仍然越差；最佳是 cap0.2，约 201.87 GB/s/rank，接近 baseline 但没有超过。</li>
+        <li>这说明固定平面要发挥价值，单纯同步是不够的；下一步应该看 A/B overlap 或按 step pipeline，让 B 残差不要等全部 A 完成。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>数据</h2>
+      <table>
+        <thead><tr><th>cap ratio</th><th>A target MiB</th><th>A MiB/rank</th><th>B MiB/rank</th><th>no-step GB/s</th><th>step GB/s</th><th>step vs no-step</th><th>step vs baseline</th><th>case</th></tr></thead>
+        <tbody>
+<tr>
+  <td>0.2x</td>
+  <td>1.71</td>
+  <td>24.96</td>
+  <td>103.04</td>
+  <td>197.12</td>
+  <td>201.87</td>
+  <td class="good">+2.4%</td>
+  <td class="bad">-0.7%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap0p2_max2p0x_128mb</code></td>
+</tr><tr>
+  <td>0.4x</td>
+  <td>3.41</td>
+  <td>47.36</td>
+  <td>80.64</td>
+  <td>177.69</td>
+  <td>200.37</td>
+  <td class="good">+12.8%</td>
+  <td class="bad">-1.4%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap0p4_max2p0x_128mb</code></td>
+</tr><tr>
+  <td>0.6x</td>
+  <td>5.12</td>
+  <td>66.99</td>
+  <td>61.01</td>
+  <td>157.03</td>
+  <td>194.27</td>
+  <td class="good">+23.7%</td>
+  <td class="bad">-4.4%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap0p6_max2p0x_128mb</code></td>
+</tr><tr>
+  <td>0.8x</td>
+  <td>6.83</td>
+  <td>83.84</td>
+  <td>44.16</td>
+  <td>141.01</td>
+  <td>186.36</td>
+  <td class="good">+32.2%</td>
+  <td class="bad">-8.3%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap0p8_max2p0x_128mb</code></td>
+</tr><tr>
+  <td>1.0x</td>
+  <td>8.53</td>
+  <td>98.13</td>
+  <td>29.87</td>
+  <td>132.59</td>
+  <td>180.13</td>
+  <td class="good">+35.9%</td>
+  <td class="bad">-11.4%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap1p0_max2p0x_128mb</code></td>
+</tr><tr>
+  <td>1.2x</td>
+  <td>10.24</td>
+  <td>109.44</td>
+  <td>18.56</td>
+  <td>123.57</td>
+  <td>167.44</td>
+  <td class="good">+35.5%</td>
+  <td class="bad">-17.6%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap1p2_max2p0x_128mb</code></td>
+</tr><tr>
+  <td>1.5x</td>
+  <td>12.80</td>
+  <td>121.60</td>
+  <td>6.40</td>
+  <td>117.28</td>
+  <td>152.88</td>
+  <td class="good">+30.4%</td>
+  <td class="bad">-24.8%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap1p5_max2p0x_128mb</code></td>
+</tr><tr>
+  <td>2.0x</td>
+  <td>17.07</td>
+  <td>128.00</td>
+  <td>0.00</td>
+  <td>125.91</td>
+  <td>156.97</td>
+  <td class="good">+24.7%</td>
+  <td class="bad">-22.8%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-step-cap2p0_max2p0x_128mb</code></td>
+</tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</main>
+</body>
+</html>

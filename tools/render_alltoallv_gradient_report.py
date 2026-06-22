@@ -42,6 +42,10 @@ def mib(value: float) -> str:
     return f"{value / 1024 / 1024:.2f}"
 
 
+def single_rank_gbps(row: dict[str, str]) -> float:
+    return float(row["global_GBps"]) / 16.0
+
+
 def profile_name(row: dict[str, str]) -> str:
     return f"ns3ub-ubx16-a2av-gradient-{row['scenario']}-{row['algorithm']}-rank0-profile.html"
 
@@ -102,10 +106,10 @@ def render_profile(row: dict[str, str], output: Path) -> None:
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
 
-def render_profiles(rows: list[dict[str, str]]) -> None:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+def render_profiles(rows: list[dict[str, str]], report_dir: Path) -> None:
+    report_dir.mkdir(parents=True, exist_ok=True)
     for row in rows:
-        render_profile(row, REPORT_DIR / profile_name(row))
+        render_profile(row, report_dir / profile_name(row))
 
 
 def table_rows(rows: list[dict[str, str]]) -> str:
@@ -115,10 +119,10 @@ def table_rows(rows: list[dict[str, str]]) -> str:
     chunks = []
     for scenario in sorted(grouped, key=lambda s: float(grouped[s]["baseline"]["max_over_avg"])):
         algs = grouped[scenario]
-        baseline_g = float(algs["baseline"]["global_GBps"])
+        baseline_g = single_rank_gbps(algs["baseline"])
         for algorithm in ("baseline", "matrix", "closv3"):
             row = algs[algorithm]
-            gbps = float(row["global_GBps"])
+            gbps = single_rank_gbps(row)
             vs = 0.0 if algorithm == "baseline" else gbps / baseline_g - 1.0
             chunks.append(
                 f"""          <tr>
@@ -128,10 +132,10 @@ def table_rows(rows: list[dict[str, str]]) -> str:
             <td>{mib(float(row['pair_avg_bytes']))}</td>
             <td>{mib(float(row['pair_max_bytes']))}</td>
             <td>{float(row['pair_cv']):.3f}</td>
-            <td>{float(row['dst_cv']):.3f}</td>
             <td>{float(row['cross_fraction']) * 100:.1f}%</td>
             <td>{float(row['makespan_us']):.3f}</td>
             <td>{gbps:.2f}</td>
+            <td>{float(row['rank0_GBps']):.2f}</td>
             <td class="{ 'good' if vs >= 0 else 'bad' }">{pct(vs)}</td>
             <td><a href="{profile_name(row)}">rank0</a></td>
           </tr>"""
@@ -146,9 +150,9 @@ def summary_rows(rows: list[dict[str, str]]) -> str:
     chunks = []
     for scenario in sorted(grouped, key=lambda s: float(grouped[s]["baseline"]["max_over_avg"])):
         algs = grouped[scenario]
-        baseline = float(algs["baseline"]["global_GBps"])
-        matrix = float(algs["matrix"]["global_GBps"])
-        clos = float(algs["closv3"]["global_GBps"])
+        baseline = single_rank_gbps(algs["baseline"])
+        matrix = single_rank_gbps(algs["matrix"])
+        clos = single_rank_gbps(algs["closv3"])
         chunks.append(
             f"""          <tr>
             <td>{float(algs['baseline']['max_over_avg']):.1f}x</td>
@@ -169,15 +173,15 @@ def render_report(rows: list[dict[str, str]]) -> str:
         by_ratio.setdefault(float(row["max_over_avg"]), {})[row["algorithm"]] = row
     r1 = by_ratio[1.0]
     r2 = by_ratio[2.0]
-    baseline_drop = 1.0 - float(r2["baseline"]["global_GBps"]) / float(r1["baseline"]["global_GBps"])
-    clos_drop = 1.0 - float(r2["closv3"]["global_GBps"]) / float(r1["closv3"]["global_GBps"])
-    matrix_drop = 1.0 - float(r2["matrix"]["global_GBps"]) / float(r1["matrix"]["global_GBps"])
+    baseline_drop = 1.0 - single_rank_gbps(r2["baseline"]) / single_rank_gbps(r1["baseline"])
+    clos_drop = 1.0 - single_rank_gbps(r2["closv3"]) / single_rank_gbps(r1["closv3"])
+    matrix_drop = 1.0 - single_rank_gbps(r2["matrix"]) / single_rank_gbps(r1["matrix"])
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UBX16 AllToAllV 等差不均衡扫描</title>
+  <title>UBX16 AllToAllV 不均衡敏感性扫描</title>
   <style>
     :root {{ --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; --blue:#2563eb; }}
     * {{ box-sizing:border-box; }}
@@ -210,32 +214,33 @@ def render_report(rows: list[dict[str, str]]) -> str:
 <body>
 <main>
   <header>
-    <h1>UBX16 AllToAllV 等差不均衡扫描</h1>
-    <p class="muted">每 rank 总发送量固定为 128MiB，15 条 peer 流按环形 offset 形成等差数列。扫描参数是最大流 / 平均流：1.0、1.2、1.5、2.0。目的 rank 总量保持均衡，所以这里主要观察单 src 的 peer 粒度不均衡。</p>
+    <h1>UBX16 AllToAllV 不均衡敏感性扫描</h1>
+    <p class="muted">本阶段只证明一件事：peer 粒度不均衡变大时，baseline、matrix、MeshClos V3 的带宽分别会退化多少。HCCL AllToAllV count 按 128MiB/rank 设置，并保留 self slot 参与等差分布计算；ns-3 只建模网络 peer 流，所以 self slot 会被丢弃。15 条网络 peer 流按环形 offset 形成等差数列；扫描参数是包含 self slot 的最大流 / 平均流：1.0、1.2、1.5、2.0。主指标是单 rank 有效带宽：全局网络吞吐 / 16。</p>
   </header>
 
   <div class="metrics">
-    <div class="metric"><span>baseline 1.0→2.0 劣化</span><strong>{baseline_drop * 100:.1f}%</strong></div>
-    <div class="metric"><span>matrix 1.0→2.0 劣化</span><strong class="bad">{matrix_drop * 100:.1f}%</strong></div>
-    <div class="metric"><span>V3 1.0→2.0 劣化</span><strong class="bad">{clos_drop * 100:.1f}%</strong></div>
-    <div class="metric"><span>2.0x 最大单流</span><strong>{mib(float(r2['baseline']['pair_max_bytes']))} MiB</strong></div>
+    <div class="metric"><span>baseline 退化</span><strong>{baseline_drop * 100:.1f}%</strong><span>max/avg 1.0x → 2.0x</span></div>
+    <div class="metric"><span>matrix 退化</span><strong class="bad">{matrix_drop * 100:.1f}%</strong><span>固定轮次更敏感</span></div>
+    <div class="metric"><span>V3 退化</span><strong class="bad">{clos_drop * 100:.1f}%</strong><span>固定平面最敏感</span></div>
+    <div class="metric"><span>2.0x V3 vs baseline</span><strong class="bad">{pct(single_rank_gbps(r2['closv3']) / single_rank_gbps(r2['baseline']) - 1.0)}</strong><span>同一不均衡度下</span></div>
   </div>
 
   <div class="layout">
     <section>
       <h2>结论</h2>
       <ul>
-        <li>均匀时 Matrix/V3 略优于 baseline：baseline 为 {float(r1['baseline']['global_GBps']):.2f} GB/s，V3 为 {float(r1['closv3']['global_GBps']):.2f} GB/s。</li>
-        <li>当最大 peer 流达到平均流 1.2x，baseline 仍为 {float(by_ratio[1.2]['baseline']['global_GBps']):.2f} GB/s，但 V3 降到 {float(by_ratio[1.2]['closv3']['global_GBps']):.2f} GB/s，开始明显低于 baseline。</li>
-        <li>2.0x 时 baseline 为 {float(r2['baseline']['global_GBps']):.2f} GB/s，V3 为 {float(r2['closv3']['global_GBps']):.2f} GB/s；V3 相对 baseline 低 {abs(float(r2['closv3']['global_GBps']) / float(r2['baseline']['global_GBps']) - 1.0) * 100:.1f}%。</li>
-        <li>这说明固定平面/单 TP 的优化算法适合均匀 AllToAll；对 AllToAllV，如果单 peer 流变大，热点流会拖尾，需要进一步做大流切分或 size-aware 平面分配。</li>
+        <li>均匀 1.0x 只作为 sanity check：三种算法都接近 strict 单 TP 网络上限，baseline 单 rank 为 {single_rank_gbps(r1['baseline']):.2f} GB/s，V3 为 {single_rank_gbps(r1['closv3']):.2f} GB/s，差距只有 {abs(single_rank_gbps(r1['closv3']) / single_rank_gbps(r1['baseline']) - 1.0) * 100:.1f}%。</li>
+        <li>不均衡一旦增加，退化速度明显分化：max/avg=1.2x 时 baseline 仍有 {single_rank_gbps(by_ratio[1.2]['baseline']):.2f} GB/s，V3 降到 {single_rank_gbps(by_ratio[1.2]['closv3']):.2f} GB/s，相对 baseline 低 {abs(single_rank_gbps(by_ratio[1.2]['closv3']) / single_rank_gbps(by_ratio[1.2]['baseline']) - 1.0) * 100:.1f}%。</li>
+        <li>max/avg=2.0x 时 baseline 从均匀场景退化 {baseline_drop * 100:.1f}%，matrix 退化 {matrix_drop * 100:.1f}%，V3 退化 {clos_drop * 100:.1f}%；V3 同场景相对 baseline 低 {abs(single_rank_gbps(r2['closv3']) / single_rank_gbps(r2['baseline']) - 1.0) * 100:.1f}%。</li>
+        <li>阶段性结论：baseline 对 peer 粒度不均衡更鲁棒；matrix/V3 的固定轮次、固定平面映射在均匀 AllToAll 下有效，但在 AllToAllV 中容易把大流串到同一逻辑通道上，形成拖尾。</li>
+        <li>下一步优化方向应从“均匀场景提带宽”转为“大流切分、size-aware 平面分配、按流量重排 peer 顺序”，目标是降低不均衡场景的尾部 makespan。</li>
       </ul>
     </section>
 
     <section>
-      <h2>趋势汇总</h2>
+      <h2>退化趋势</h2>
       <table>
-        <thead><tr><th>max/avg</th><th>pair CV</th><th>Baseline GB/s</th><th>Matrix GB/s</th><th>V3 GB/s</th><th>Matrix vs baseline</th><th>V3 vs baseline</th></tr></thead>
+        <thead><tr><th>max/avg</th><th>pair CV</th><th>Baseline 单 rank GB/s</th><th>Matrix 单 rank GB/s</th><th>V3 单 rank GB/s</th><th>Matrix vs baseline</th><th>V3 vs baseline</th></tr></thead>
         <tbody>
 {summary_rows(rows)}
         </tbody>
@@ -246,7 +251,7 @@ def render_report(rows: list[dict[str, str]]) -> str:
       <h2>完整结果</h2>
       <table>
         <thead>
-          <tr><th>max/avg</th><th>算法</th><th>min MiB</th><th>avg MiB</th><th>max MiB</th><th>pair CV</th><th>dst CV</th><th>跨组占比</th><th>us</th><th>GB/s</th><th>vs baseline</th><th>Profile</th></tr>
+          <tr><th>max/avg</th><th>算法</th><th>min MiB</th><th>avg MiB</th><th>max MiB</th><th>pair CV</th><th>跨组占比</th><th>us</th><th>单 rank GB/s</th><th>Rank0 TX GB/s</th><th>vs baseline</th><th>Profile</th></tr>
         </thead>
         <tbody>
 {table_rows(rows)}
@@ -258,8 +263,10 @@ def render_report(rows: list[dict[str, str]]) -> str:
       <h2>说明</h2>
       <ul>
         <li><code>pair CV</code> 是所有 src-dst peer 流大小的变异系数；本实验每个源 rank 的形状相同，所以它等价于 rank0 出流的 CV。</li>
-        <li><code>dst CV</code> 约为 0，说明目的 rank 总接收量被刻意保持均衡，避免目的热点干扰判断。</li>
-        <li>2.0x 场景的理论最小值会接近 0；生成器强制所有 task 至少 1 byte，以避免 0-byte task 干扰 ns-3 调度。</li>
+        <li><code>单 rank GB/s</code> 使用全局网络吞吐 / 16，表示集群同步完成口径下平均每个 rank 的有效网络带宽；不是除以 15。除以 15 得到的是平均单 peer 流带宽。</li>
+        <li><code>Rank0 TX GB/s</code> 是 rank0 自己 15 条发送 task 完成时间下的局部 TX 视角，可能高于或低于全局同步口径。</li>
+        <li>本实验保留 self slot 参与 HCCL count 分布，再丢弃 self slot。因此报告中的 min/avg/max 是 15 条网络 peer 流的统计，网络注入总量会略小于 128MiB/rank。</li>
+        <li>2.0x 场景下 self slot 可能接近 0；生成器强制所有 slot 至少 1 byte，以避免 0-byte task 干扰 ns-3 调度。</li>
       </ul>
     </section>
   </div>
@@ -277,7 +284,7 @@ def main() -> int:
     args = parser.parse_args()
     rows = load_rows(args.summary)
     if not args.skip_profiles:
-        render_profiles(rows)
+        render_profiles(rows, args.output.parent)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_report(rows))
     print(f"wrote {args.output}")

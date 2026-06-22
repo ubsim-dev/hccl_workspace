@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Run deterministic UBX16 AllToAllV gradient-size experiments.
 
-Each source rank sends a fixed total amount.  Its 15 peer flows form an
-arithmetic progression by ring offset, so max/avg is controlled directly while
-destination totals remain balanced across the cluster.
+Each source rank owns a fixed AllToAllV count including the self slot.  The
+rankSize slots form an arithmetic progression by cyclic distance, matching the
+HCCL opbase traffic script.  The self slot is then dropped because it does not
+inject network traffic in ns-3.
 """
 
 from __future__ import annotations
@@ -86,11 +87,12 @@ def split_linear(total: int, count: int, max_over_avg: float) -> list[int]:
 
 def gradient_sizes(per_rank_bytes: int, max_over_avg: float) -> dict[tuple[int, int], int]:
     sizes: dict[tuple[int, int], int] = {}
-    values = split_linear(per_rank_bytes, RANK_COUNT - 1, max_over_avg)
+    values = split_linear(per_rank_bytes, RANK_COUNT, max_over_avg)
     for src in range(RANK_COUNT):
-        for offset, size in enumerate(values, start=1):
+        for offset, size in enumerate(values):
             dst = (src + offset) % RANK_COUNT
-            sizes[(src, dst)] = size
+            if dst != src:
+                sizes[(src, dst)] = size
     return sizes
 
 

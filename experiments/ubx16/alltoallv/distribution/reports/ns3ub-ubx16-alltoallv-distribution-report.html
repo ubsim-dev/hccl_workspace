@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV 分布型不均衡扫描</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; --blue:#2563eb; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1240px, calc(100% - 36px)); margin:26px auto 48px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
+    p { margin:8px 0; }
+    section, .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; line-height:1.2; }
+    .layout { display:grid; gap:14px; }
+    table { width:100%; border-collapse:collapse; table-layout:auto; font-variant-numeric:tabular-nums; }
+    th, td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align:left; }
+    th { color:var(--muted); font-size:12px; background:#fbfcfe; }
+    tr:last-child td { border-bottom:0; }
+    a { color:var(--blue); text-decoration:none; font-weight:650; }
+    a:hover { text-decoration:underline; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    ul { margin:8px 0 0 18px; padding:0; }
+    li { margin:5px 0; }
+    .table-wrap { overflow-x:auto; }
+    @media (max-width:900px) { .metrics { grid-template-columns:1fr; } table { font-size:12px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV 分布型不均衡扫描</h1>
+    <p class="muted">每个源 rank 总发送量固定为 128MiB。15 条 peer 流使用确定性近似随机分布，并将每个源 rank 的最大/最小流大小控制在 1.00x、1.25x、1.50x、2.00x。这里只比较 baseline 和 meshclos，观察不均衡度升高时单 rank 有效带宽如何下降。</p>
+  </header>
+
+  <div class="metrics">
+    <div class="metric"><span>baseline 退化</span><strong>13.3%</strong><span>1.00x → 2.00x</span></div>
+    <div class="metric"><span>meshclos 退化</span><strong class="bad">40.1%</strong><span>1.00x → 2.00x</span></div>
+    <div class="metric"><span>2.00x meshclos vs baseline</span><strong class="bad">-30.2%</strong><span>同一分布下</span></div>
+    <div class="metric"><span>每 rank 总量</span><strong>128MiB</strong><span>发送侧固定</span></div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <h2>结论</h2>
+      <ul>
+        <li>这组不是等差数列，而是受控的近似随机分布；每个源 rank 总发送量固定，单源 max/min 不超过 2x。</li>
+        <li>发送侧和接收侧分别统计 rank0 的 min/avg/max、max/avg、max/min；报告不讨论热点，只展示 rank0 profile 和全局完成口径带宽。</li>
+        <li>随着流量不均衡上升，baseline 和 meshclos 的带宽都会下降；meshclos 的固定平面/固定线程映射对大流拖尾更敏感。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>退化趋势</h2>
+      <table>
+        <thead><tr><th>目标 max/min</th><th>rank0 发送 max/avg</th><th>rank0 接收 max/avg</th><th>baseline 单 rank GB/s</th><th>meshclos 单 rank GB/s</th><th>meshclos vs baseline</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1.00x</td>
+            <td>1.00x</td>
+            <td>1.00x</td>
+            <td>238.57</td>
+            <td>241.07</td>
+            <td class="good">+1.0%</td>
+          </tr>
+          <tr>
+            <td>1.25x</td>
+            <td>1.13x</td>
+            <td>1.09x</td>
+            <td>228.51</td>
+            <td>192.44</td>
+            <td class="bad">-15.8%</td>
+          </tr>
+          <tr>
+            <td>1.50x</td>
+            <td>1.23x</td>
+            <td>1.16x</td>
+            <td>219.46</td>
+            <td>162.07</td>
+            <td class="bad">-26.1%</td>
+          </tr>
+          <tr>
+            <td>1.75x</td>
+            <td>1.32x</td>
+            <td>1.22x</td>
+            <td>212.82</td>
+            <td>151.53</td>
+            <td class="bad">-28.8%</td>
+          </tr>
+          <tr>
+            <td>2.00x</td>
+            <td>1.40x</td>
+            <td>1.28x</td>
+            <td>206.84</td>
+            <td>144.31</td>
+            <td class="bad">-30.2%</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>完整结果</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>目标 max/min</th><th>算法</th><th>send min MiB</th><th>send avg MiB</th><th>send max MiB</th><th>send max/avg</th><th>send max/min</th><th>recv min MiB</th><th>recv avg MiB</th><th>recv max MiB</th><th>recv max/avg</th><th>recv max/min</th><th>us</th><th>单 rank GB/s</th><th>Rank0 TX GB/s</th><th>vs baseline</th><th>Profile</th></tr>
+          </thead>
+          <tbody>
+          <tr>
+            <td>1.00x</td>
+            <td>baseline</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>1.00x</td>
+            <td>1.00x</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>1.00x</td>
+            <td>1.00x</td>
+            <td>562.596</td>
+            <td>238.57</td>
+            <td>240.01</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p0x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.00x</td>
+            <td>meshclos</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>1.00x</td>
+            <td>1.00x</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>8.53</td>
+            <td>1.00x</td>
+            <td>1.00x</td>
+            <td>556.756</td>
+            <td>241.07</td>
+            <td>241.07</td>
+            <td class="good">+1.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p0x-meshclos-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.25x</td>
+            <td>baseline</td>
+            <td>7.71</td>
+            <td>8.53</td>
+            <td>9.63</td>
+            <td>1.13x</td>
+            <td>1.25x</td>
+            <td>7.78</td>
+            <td>8.54</td>
+            <td>9.28</td>
+            <td>1.09x</td>
+            <td>1.19x</td>
+            <td>587.366</td>
+            <td>228.51</td>
+            <td>238.31</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p25x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.25x</td>
+            <td>meshclos</td>
+            <td>7.71</td>
+            <td>8.53</td>
+            <td>9.63</td>
+            <td>1.13x</td>
+            <td>1.25x</td>
+            <td>7.78</td>
+            <td>8.54</td>
+            <td>9.28</td>
+            <td>1.09x</td>
+            <td>1.19x</td>
+            <td>697.444</td>
+            <td>192.44</td>
+            <td>219.24</td>
+            <td class="bad">-15.8%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p25x-meshclos-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.50x</td>
+            <td>baseline</td>
+            <td>7.02</td>
+            <td>8.53</td>
+            <td>10.54</td>
+            <td>1.23x</td>
+            <td>1.50x</td>
+            <td>7.15</td>
+            <td>8.54</td>
+            <td>9.91</td>
+            <td>1.16x</td>
+            <td>1.39x</td>
+            <td>611.594</td>
+            <td>219.46</td>
+            <td>224.63</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p5x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.50x</td>
+            <td>meshclos</td>
+            <td>7.02</td>
+            <td>8.53</td>
+            <td>10.54</td>
+            <td>1.23x</td>
+            <td>1.50x</td>
+            <td>7.15</td>
+            <td>8.54</td>
+            <td>9.91</td>
+            <td>1.16x</td>
+            <td>1.39x</td>
+            <td>828.130</td>
+            <td>162.07</td>
+            <td>204.69</td>
+            <td class="bad">-26.1%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p5x-meshclos-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.75x</td>
+            <td>baseline</td>
+            <td>6.45</td>
+            <td>8.53</td>
+            <td>11.29</td>
+            <td>1.32x</td>
+            <td>1.75x</td>
+            <td>6.61</td>
+            <td>8.54</td>
+            <td>10.45</td>
+            <td>1.22x</td>
+            <td>1.58x</td>
+            <td>630.652</td>
+            <td>212.82</td>
+            <td>219.59</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p75x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.75x</td>
+            <td>meshclos</td>
+            <td>6.45</td>
+            <td>8.53</td>
+            <td>11.29</td>
+            <td>1.32x</td>
+            <td>1.75x</td>
+            <td>6.61</td>
+            <td>8.54</td>
+            <td>10.45</td>
+            <td>1.22x</td>
+            <td>1.58x</td>
+            <td>885.760</td>
+            <td>151.53</td>
+            <td>193.23</td>
+            <td class="bad">-28.8%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin1p75x-meshclos-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>2.00x</td>
+            <td>baseline</td>
+            <td>5.97</td>
+            <td>8.53</td>
+            <td>11.93</td>
+            <td>1.40x</td>
+            <td>2.00x</td>
+            <td>6.15</td>
+            <td>8.53</td>
+            <td>10.91</td>
+            <td>1.28x</td>
+            <td>1.77x</td>
+            <td>648.887</td>
+            <td>206.84</td>
+            <td>215.29</td>
+            <td class="good">0.0%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin2p0x-baseline-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>2.00x</td>
+            <td>meshclos</td>
+            <td>5.97</td>
+            <td>8.53</td>
+            <td>11.93</td>
+            <td>1.40x</td>
+            <td>2.00x</td>
+            <td>6.15</td>
+            <td>8.53</td>
+            <td>10.91</td>
+            <td>1.28x</td>
+            <td>1.77x</td>
+            <td>930.071</td>
+            <td>144.31</td>
+            <td>183.96</td>
+            <td class="bad">-30.2%</td>
+            <td><a href="ns3ub-ubx16-a2av-distribution-maxmin2p0x-meshclos-rank0-profile.html">rank0</a></td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>口径</h2>
+      <ul>
+        <li><code>单 rank GB/s</code> 是全局同步完成口径下的平均单 rank 带宽。</li>
+        <li><code>Rank0 TX GB/s</code> 只看 rank0 发送 task 的局部完成时间，用来辅助解释 rank0 profile。</li>
+        <li><code>send</code> 是 rank0 发往其他 15 个 peer 的流大小统计；<code>recv</code> 是其他 15 个 rank 发往 rank0 的流大小统计。</li>
+      </ul>
+    </section>
+  </div>
+</main>
+</body>
+</html>

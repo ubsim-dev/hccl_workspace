@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV A+B Hybrid 实验</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1180px, calc(100% - 36px)); margin:26px auto 48px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
+    p { margin:8px 0; }
+    section, .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; line-height:1.2; }
+    .layout { display:grid; gap:14px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
+    th, td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), th:last-child, td:last-child { text-align:left; }
+    th { color:var(--muted); font-size:12px; background:#fbfcfe; }
+    tr:last-child td { border-bottom:0; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    ul { margin:8px 0 0 18px; padding:0; }
+    li { margin:5px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV A+B Hybrid 实验</h1>
+    <p class="muted">A 阶段使用 MeshClos V3 strict 单 TP / 固定平面，priority=7；B 阶段使用 Mesh1D baseline full TP，priority=6。两套 TP 可以走相同物理端口，但 tpn 在每个 node 上重新编号，保证唯一。当前实验采用 A_then_B 串行：所有 B task 依赖全部 A task。</p>
+  </header>
+
+  <div class="metrics">
+    <div class="metric"><span>2.0x baseline</span><strong>203.20</strong><span>GB/s per rank</span></div>
+    <div class="metric"><span>2.0x meshclos</span><strong class="bad">125.91</strong><span>-38.0% vs baseline</span></div>
+    <div class="metric"><span>2.0x hybrid-min</span><strong>202.93</strong><span>-0.1% vs baseline</span></div>
+    <div class="metric"><span>2.0x hybrid-pad80</span><strong class="bad">195.06</strong><span>-4.0% vs baseline</span></div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <h2>结论</h2>
+      <ul>
+        <li>priority namespace 的方案跑通了：同一个 case 内 A 可以使用单 TP 固定平面，B 可以使用 full TP。</li>
+        <li>A_then_B 串行下，<code>hybrid-min</code> 基本贴近 baseline；这说明保守拆分不会比 baseline 明显更好，因为 B 残差阶段仍然决定尾部。</li>
+        <li><code>hybrid-pad80</code> 在 1.5x/2.0x 下不如 baseline，主要原因是 padding 增加网络注入，并且 B 被串行放在 A 之后。</li>
+        <li>这个结果不否定 A+B 思路，但说明有效版本不能简单 A_then_B。下一步更值得测的是 A/B overlap，或者让 B 在 A 的早期就以低优先级/独立线程启动。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>趋势</h2>
+      <table>
+        <thead><tr><th>max/avg</th><th>baseline</th><th>meshclos</th><th>hybrid-min</th><th>hybrid-pad80</th><th>min vs baseline</th><th>pad80 vs baseline</th></tr></thead>
+        <tbody>
+<tr>
+  <td>1.0x</td>
+  <td>238.69</td>
+  <td>241.07</td>
+  <td>241.07</td>
+  <td>239.63</td>
+  <td class="good">+1.0%</td>
+  <td class="good">+0.4%</td>
+</tr>
+<tr>
+  <td>1.2x</td>
+  <td>230.44</td>
+  <td>201.69</td>
+  <td>231.09</td>
+  <td>231.13</td>
+  <td class="good">+0.3%</td>
+  <td class="good">+0.3%</td>
+</tr>
+<tr>
+  <td>1.5x</td>
+  <td>218.99</td>
+  <td>158.84</td>
+  <td>219.59</td>
+  <td>218.02</td>
+  <td class="good">+0.3%</td>
+  <td class="bad">-0.4%</td>
+</tr>
+<tr>
+  <td>2.0x</td>
+  <td>203.20</td>
+  <td>125.91</td>
+  <td>202.93</td>
+  <td>195.06</td>
+  <td class="bad">-0.1%</td>
+  <td class="bad">-4.0%</td>
+</tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>完整数据</h2>
+      <table>
+        <thead><tr><th>max/avg</th><th>算法</th><th>min MiB</th><th>avg MiB</th><th>max MiB</th><th>CV</th><th>A MiB/rank</th><th>B MiB/rank</th><th>pad MiB/rank</th><th>us</th><th>GB/s/rank</th><th>vs baseline</th><th>case</th></tr></thead>
+        <tbody>
+<tr>
+  <td>1.0x</td>
+  <td>baseline</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>0.000</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>527.158</td>
+  <td>238.69</td>
+  <td class="good">0.0%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max1p0x_baseline_128mb</code></td>
+</tr>
+<tr>
+  <td>1.0x</td>
+  <td>meshclos</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>0.000</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>521.962</td>
+  <td>241.07</td>
+  <td class="good">+1.0%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max1p0x_closv3_128mb</code></td>
+</tr>
+<tr>
+  <td>1.0x</td>
+  <td>hybrid-min</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>0.000</td>
+  <td>120.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>521.962</td>
+  <td>241.07</td>
+  <td class="good">+1.0%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-min_max1p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>1.0x</td>
+  <td>hybrid-pad80</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>8.00</td>
+  <td>0.000</td>
+  <td>96.00</td>
+  <td>24.00</td>
+  <td>0.00</td>
+  <td>525.094</td>
+  <td>239.63</td>
+  <td class="good">+0.4%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad80_max1p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>1.2x</td>
+  <td>baseline</td>
+  <td>6.61</td>
+  <td>8.11</td>
+  <td>9.60</td>
+  <td>0.114</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>553.329</td>
+  <td>230.44</td>
+  <td class="good">0.0%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max1p2x_baseline_128mb</code></td>
+</tr>
+<tr>
+  <td>1.2x</td>
+  <td>meshclos</td>
+  <td>6.61</td>
+  <td>8.11</td>
+  <td>9.60</td>
+  <td>0.114</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>632.203</td>
+  <td>201.69</td>
+  <td class="bad">-12.5%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max1p2x_closv3_128mb</code></td>
+</tr>
+<tr>
+  <td>1.2x</td>
+  <td>hybrid-min</td>
+  <td>6.61</td>
+  <td>8.11</td>
+  <td>9.60</td>
+  <td>0.114</td>
+  <td>99.20</td>
+  <td>22.40</td>
+  <td>0.00</td>
+  <td>551.769</td>
+  <td>231.09</td>
+  <td class="good">+0.3%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-min_max1p2x_128mb</code></td>
+</tr>
+<tr>
+  <td>1.2x</td>
+  <td>hybrid-pad80</td>
+  <td>6.61</td>
+  <td>8.11</td>
+  <td>9.60</td>
+  <td>0.114</td>
+  <td>97.28</td>
+  <td>24.32</td>
+  <td>0.00</td>
+  <td>551.670</td>
+  <td>231.13</td>
+  <td class="good">+0.3%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad80_max1p2x_128mb</code></td>
+</tr>
+<tr>
+  <td>1.5x</td>
+  <td>baseline</td>
+  <td>4.53</td>
+  <td>8.27</td>
+  <td>12.00</td>
+  <td>0.279</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>593.743</td>
+  <td>218.99</td>
+  <td class="good">0.0%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max1p5x_baseline_128mb</code></td>
+</tr>
+<tr>
+  <td>1.5x</td>
+  <td>meshclos</td>
+  <td>4.53</td>
+  <td>8.27</td>
+  <td>12.00</td>
+  <td>0.279</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>818.575</td>
+  <td>158.84</td>
+  <td class="bad">-27.5%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max1p5x_closv3_128mb</code></td>
+</tr>
+<tr>
+  <td>1.5x</td>
+  <td>hybrid-min</td>
+  <td>4.53</td>
+  <td>8.27</td>
+  <td>12.00</td>
+  <td>0.279</td>
+  <td>68.00</td>
+  <td>56.00</td>
+  <td>0.00</td>
+  <td>592.115</td>
+  <td>219.59</td>
+  <td class="good">+0.3%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-min_max1p5x_128mb</code></td>
+</tr>
+<tr>
+  <td>1.5x</td>
+  <td>hybrid-pad80</td>
+  <td>4.53</td>
+  <td>8.27</td>
+  <td>12.00</td>
+  <td>0.279</td>
+  <td>99.20</td>
+  <td>29.92</td>
+  <td>5.12</td>
+  <td>596.378</td>
+  <td>218.02</td>
+  <td class="bad">-0.4%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad80_max1p5x_128mb</code></td>
+</tr>
+<tr>
+  <td>2.0x</td>
+  <td>baseline</td>
+  <td>1.07</td>
+  <td>8.53</td>
+  <td>16.00</td>
+  <td>0.540</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>660.527</td>
+  <td>203.20</td>
+  <td class="good">0.0%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max2p0x_baseline_128mb</code></td>
+</tr>
+<tr>
+  <td>2.0x</td>
+  <td>meshclos</td>
+  <td>1.07</td>
+  <td>8.53</td>
+  <td>16.00</td>
+  <td>0.540</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>1065.990</td>
+  <td>125.91</td>
+  <td class="bad">-38.0%</td>
+  <td><code>generated_topology_ubx16_a2av_gradient_max2p0x_closv3_128mb</code></td>
+</tr>
+<tr>
+  <td>2.0x</td>
+  <td>hybrid-min</td>
+  <td>1.07</td>
+  <td>8.53</td>
+  <td>16.00</td>
+  <td>0.540</td>
+  <td>16.00</td>
+  <td>112.00</td>
+  <td>0.00</td>
+  <td>661.402</td>
+  <td>202.93</td>
+  <td class="bad">-0.1%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-min_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>2.0x</td>
+  <td>hybrid-pad80</td>
+  <td>1.07</td>
+  <td>8.53</td>
+  <td>16.00</td>
+  <td>0.540</td>
+  <td>102.40</td>
+  <td>44.16</td>
+  <td>18.56</td>
+  <td>688.091</td>
+  <td>195.06</td>
+  <td class="bad">-4.0%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad80_max2p0x_128mb</code></td>
+</tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV Snake Plane Scheduling</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1100px, calc(100% - 36px)); margin:26px auto 48px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
+    section, .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; }
+    .layout { display:grid; gap:14px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
+    th, td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    th:first-child, td:first-child, th:last-child, td:last-child { text-align:left; }
+    th { color:var(--muted); font-size:12px; background:#fbfcfe; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    ul { margin:8px 0 0 18px; padding:0; }
+    li { margin:5px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV Snake Plane Scheduling</h1>
+    <p class="muted">单 seed 随机场景，rank 总发送量 max/min≈1.2，128MiB/rank。snake 对每个 src 的跨 Pod peer 按大小排序后蛇形分配到 4 个 plane；snake-offset 再叠加 src_rank % 4 plane offset。每个 src-plane 与 dst-plane 都显式串行建模。</p>
+  </header>
+  <div class="metrics">
+    <div class="metric"><span>seed</span><strong>7</strong></div>
+    <div class="metric"><span>src max/min</span><strong>1.157</strong></div>
+    <div class="metric"><span>pair CV</span><strong>0.333</strong></div>
+    <div class="metric"><span>cross fraction</span><strong>80.6%</strong></div>
+  </div>
+  <div class="layout">
+    <section>
+      <h2>结果</h2>
+      <table>
+        <thead><tr><th>算法</th><th>makespan us</th><th>GB/s/rank</th><th>vs baseline</th><th>plane CV</th><th>max dst-plane queue</th><th>case</th></tr></thead>
+        <tbody>
+<tr>
+  <td>baseline</td>
+  <td>688.060</td>
+  <td>195.07</td>
+  <td class="good">+0.0%</td>
+  <td>0.000</td>
+  <td>0</td>
+  <td><code>generated_topology_ubx16_a2av_snake_baseline_seed7_128mb</code></td>
+</tr><tr>
+  <td>snake</td>
+  <td>1483.718</td>
+  <td>90.46</td>
+  <td class="bad">-53.6%</td>
+  <td>0.065</td>
+  <td>6</td>
+  <td><code>generated_topology_ubx16_a2av_snake_seed7_128mb</code></td>
+</tr><tr>
+  <td>snake-offset</td>
+  <td>1507.435</td>
+  <td>89.04</td>
+  <td class="bad">-54.4%</td>
+  <td>0.010</td>
+  <td>6</td>
+  <td><code>generated_topology_ubx16_a2av_snake_offset_seed7_128mb</code></td>
+</tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>说明</h2>
+      <ul>
+        <li>baseline 使用当前 Mesh1D full-TP 建模。</li>
+        <li>snake/snake-offset 每个跨 Pod pair 只保留一个 plane TP，并通过 phase dependency 模拟 src-plane 和 dst-plane 独占队列。</li>
+        <li>这版只验证单个随机场景是否有收益；后续需要扫随机种子、pair 分布 CV 和 src load skew。</li>
+      </ul>
+    </section>
+  </div>
+</main>
+</body>
+</html>

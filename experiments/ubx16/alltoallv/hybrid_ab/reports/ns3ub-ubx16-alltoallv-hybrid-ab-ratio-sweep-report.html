@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV Hybrid A/B Ratio Sweep</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1180px, calc(100% - 36px)); margin:26px auto 48px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
+    p { margin:8px 0; }
+    section, .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; line-height:1.2; }
+    .layout { display:grid; gap:14px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
+    th, td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    th:first-child, td:first-child, th:last-child, td:last-child { text-align:left; }
+    th { color:var(--muted); font-size:12px; background:#fbfcfe; }
+    tr:last-child td { border-bottom:0; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    ul { margin:8px 0 0 18px; padding:0; }
+    li { margin:5px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV Hybrid A/B Ratio Sweep</h1>
+    <p class="muted">固定 max/avg=2.0，128MiB/rank。A 阶段走固定平面 single TP，B 阶段走 baseline full TP，当前为 A_then_B 同步。cap 表示不 padding，A 每条流最多发送 ratio*avg；pad 表示强制每条流发送 ratio*avg，不足部分算冗余通信。</p>
+  </header>
+
+  <div class="metrics">
+    <div class="metric"><span>baseline</span><strong>203.20</strong><span>GB/s per rank</span></div>
+    <div class="metric"><span>pure meshclos</span><strong>125.91</strong><span>-38.0% vs baseline</span></div>
+    <div class="metric"><span>best cap</span><strong>197.12</strong><span>0.2x, -3.0%</span></div>
+    <div class="metric"><span>best pad</span><strong>202.91</strong><span>0.4x, -0.1%</span></div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <h2>流量分布</h2>
+      <p>non-self peer 流大小：min 1.07 MiB，avg 8.53 MiB，max 16.00 MiB，max/avg=2.0。</p>
+    </section>
+
+    <section>
+      <h2>结论</h2>
+      <ul>
+        <li>不 padding 的 cap 同步切分不是好方向：ratio 从 0.2 增大到 1.5 时，A 阶段越来越像固定平面尾部，整体从 197.12 GB/s 降到 117.28 GB/s。</li>
+        <li>padding 小比例可以接近 baseline：pad0.2/pad0.4 约 202-203 GB/s，和 baseline 203.20 GB/s 基本持平。</li>
+        <li>padding 大比例会明显变差：pad2.0 的有效带宽只有 120.56 GB/s，因为每 rank padding 约 128 MiB，网络注入约翻倍。</li>
+        <li>所以如果 A/B 严格同步，合理比例只能很小；想让固定平面真的有收益，需要改成 overlap/pipeline，而不是扩大同步 A 阶段。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>完整数据</h2>
+      <table>
+        <thead><tr><th>模式</th><th>比例</th><th>A target MiB</th><th>A MiB/rank</th><th>B MiB/rank</th><th>pad MiB/rank</th><th>tasks</th><th>us</th><th>GB/s/rank</th><th>vs baseline</th><th>case</th></tr></thead>
+        <tbody>
+<tr>
+  <td>cap</td>
+  <td>0.2x</td>
+  <td>1.71</td>
+  <td>24.96</td>
+  <td>103.04</td>
+  <td>0.00</td>
+  <td>464</td>
+  <td>680.905</td>
+  <td>197.12</td>
+  <td class="bad">-3.0%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap0p2_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>cap</td>
+  <td>0.4x</td>
+  <td>3.41</td>
+  <td>47.36</td>
+  <td>80.64</td>
+  <td>0.00</td>
+  <td>432</td>
+  <td>755.337</td>
+  <td>177.69</td>
+  <td class="bad">-12.6%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap0p4_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>cap</td>
+  <td>0.6x</td>
+  <td>5.12</td>
+  <td>66.99</td>
+  <td>61.01</td>
+  <td>0.00</td>
+  <td>416</td>
+  <td>854.708</td>
+  <td>157.03</td>
+  <td class="bad">-22.7%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap0p6_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>cap</td>
+  <td>0.8x</td>
+  <td>6.83</td>
+  <td>83.84</td>
+  <td>44.16</td>
+  <td>0.00</td>
+  <td>384</td>
+  <td>951.842</td>
+  <td>141.01</td>
+  <td class="bad">-30.6%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap0p8_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>cap</td>
+  <td>1.0x</td>
+  <td>8.53</td>
+  <td>98.13</td>
+  <td>29.87</td>
+  <td>0.00</td>
+  <td>368</td>
+  <td>1012.271</td>
+  <td>132.59</td>
+  <td class="bad">-34.7%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap1p0_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>cap</td>
+  <td>1.2x</td>
+  <td>10.24</td>
+  <td>109.44</td>
+  <td>18.56</td>
+  <td>0.00</td>
+  <td>336</td>
+  <td>1086.154</td>
+  <td>123.57</td>
+  <td class="bad">-39.2%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap1p2_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>cap</td>
+  <td>1.5x</td>
+  <td>12.80</td>
+  <td>121.60</td>
+  <td>6.40</td>
+  <td>0.00</td>
+  <td>304</td>
+  <td>1144.464</td>
+  <td>117.28</td>
+  <td class="bad">-42.3%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap1p5_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>cap</td>
+  <td>2.0x</td>
+  <td>17.07</td>
+  <td>128.00</td>
+  <td>0.00</td>
+  <td>0.00</td>
+  <td>240</td>
+  <td>1065.990</td>
+  <td>125.91</td>
+  <td class="bad">-38.0%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-cap2p0_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>0.2x</td>
+  <td>1.71</td>
+  <td>25.60</td>
+  <td>103.04</td>
+  <td>0.64</td>
+  <td>464</td>
+  <td>663.239</td>
+  <td>202.37</td>
+  <td class="bad">-0.4%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad0p2_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>0.4x</td>
+  <td>3.41</td>
+  <td>51.20</td>
+  <td>80.64</td>
+  <td>3.84</td>
+  <td>432</td>
+  <td>661.460</td>
+  <td>202.91</td>
+  <td class="bad">-0.1%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad0p4_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>0.6x</td>
+  <td>5.12</td>
+  <td>76.80</td>
+  <td>61.01</td>
+  <td>9.81</td>
+  <td>416</td>
+  <td>667.552</td>
+  <td>201.06</td>
+  <td class="bad">-1.1%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad0p6_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>0.8x</td>
+  <td>6.83</td>
+  <td>102.40</td>
+  <td>44.16</td>
+  <td>18.56</td>
+  <td>384</td>
+  <td>688.091</td>
+  <td>195.06</td>
+  <td class="bad">-4.0%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad0p8_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>1.0x</td>
+  <td>8.53</td>
+  <td>128.00</td>
+  <td>29.87</td>
+  <td>29.87</td>
+  <td>368</td>
+  <td>719.547</td>
+  <td>186.53</td>
+  <td class="bad">-8.2%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad1p0_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>1.2x</td>
+  <td>10.24</td>
+  <td>153.60</td>
+  <td>18.56</td>
+  <td>44.16</td>
+  <td>336</td>
+  <td>791.267</td>
+  <td>169.62</td>
+  <td class="bad">-16.5%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad1p2_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>1.5x</td>
+  <td>12.80</td>
+  <td>192.00</td>
+  <td>6.40</td>
+  <td>70.40</td>
+  <td>304</td>
+  <td>903.453</td>
+  <td>148.56</td>
+  <td class="bad">-26.9%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad1p5_max2p0x_128mb</code></td>
+</tr>
+<tr>
+  <td>pad</td>
+  <td>2.0x</td>
+  <td>17.07</td>
+  <td>256.00</td>
+  <td>0.00</td>
+  <td>128.00</td>
+  <td>240</td>
+  <td>1113.262</td>
+  <td>120.56</td>
+  <td class="bad">-40.7%</td>
+  <td><code>generated_topology_ubx16_a2av_hybrid-pad2p0_max2p0x_128mb</code></td>
+</tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</main>
+</body>
+</html>
