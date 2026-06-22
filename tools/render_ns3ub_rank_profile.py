@@ -6,8 +6,8 @@ Rows are logical algorithm parallel units, not physical ports:
   - clos-thread[i] for cross-mesh peers, matching MeshClosV3 linkIdx.
 
 The bars use ns-3 task start/end times. If multiple tasks mapped to the same
-logical unit overlap in ns-3, the row is split into visual sublanes instead of
-inventing a serialization that is not present in task_statistics.csv.
+logical unit overlap materially in ns-3, the row is split into visual sublanes
+instead of inventing a serialization that is not present in task_statistics.csv.
 """
 
 from __future__ import annotations
@@ -142,13 +142,13 @@ def load_rank_tasks(
     return sorted(tasks, key=lambda t: (t.unit_kind, t.unit_idx, t.task_id))
 
 
-def pack_sublanes(tasks: list[Task]) -> list[tuple[Task, int]]:
+def pack_sublanes(tasks: list[Task], overlap_epsilon_us: float) -> list[tuple[Task, int]]:
     ends: list[float] = []
     packed: list[tuple[Task, int]] = []
     for task in sorted(tasks, key=lambda t: (t.start_us, t.end_us, t.task_id)):
         sublane = None
         for idx, end_us in enumerate(ends):
-            if task.start_us >= end_us:
+            if task.start_us + overlap_epsilon_us >= end_us:
                 sublane = idx
                 break
         if sublane is None:
@@ -160,7 +160,16 @@ def pack_sublanes(tasks: list[Task]) -> list[tuple[Task, int]]:
     return packed
 
 
-def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, clos_channels: int, title: str) -> str:
+def render_html(
+    case_dir: Path,
+    tasks: list[Task],
+    rank: int,
+    group_size: int,
+    clos_channels: int,
+    title: str,
+    sublane_epsilon_us: float,
+    markers: list[tuple[float, str]],
+) -> str:
     max_end = max((task.end_us for task in tasks), default=1.0)
     total_bytes = sum(task.size for task in tasks)
     direct_gbs = total_bytes / max_end / 1e3 if max_end else 0
@@ -186,7 +195,7 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
     row_entries = []
     y = top
     for lane in lane_order:
-        packed = pack_sublanes(lanes[lane])
+        packed = pack_sublanes(lanes[lane], sublane_epsilon_us)
         sublane_count = max((s for _, s in packed), default=0) + 1
         row_h = max(min_row_h, sublane_count * sublane_h + 9)
         row_entries.append((lane, packed, y, row_h))
@@ -202,6 +211,18 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
             f'<text class="tick" x="{x:.2f}" y="{top - 36}" text-anchor="middle">{t:.1f}us</text>'
         )
 
+    marker_rows = []
+    for marker_us, marker_label in markers:
+        if marker_us < 0 or marker_us > max_end:
+            continue
+        x = left + marker_us * x_scale
+        marker_rows.append(
+            f'<line class="iter-marker" x1="{x:.2f}" y1="{top - 30}" '
+            f'x2="{x:.2f}" y2="{height - 44}" />'
+            f'<text class="iter-marker-label" x="{x + 6:.2f}" y="{top - 14}">'
+            f'{html.escape(marker_label)} {marker_us:.1f}us</text>'
+        )
+
     rows = []
     for lane, packed, row_y, row_h in row_entries:
         kind, idx = lane
@@ -212,6 +233,32 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
             f'<text class="row-label" x="16" y="{row_y + 12:.2f}">{html.escape(label)}</text>'
             f'<text class="row-meta" x="124" y="{row_y + 12:.2f}">{len(lane_tasks)} task</text>'
         )
+        by_sublane: dict[int, list[Task]] = defaultdict(list)
+        for task, sublane in packed:
+            by_sublane[sublane].append(task)
+        for sublane, sublane_tasks in by_sublane.items():
+            ordered = sorted(sublane_tasks, key=lambda t: (t.start_us, t.end_us, t.task_id))
+            for prev, cur in zip(ordered, ordered[1:]):
+                gap_us = cur.start_us - prev.end_us
+                if gap_us <= 1e-6:
+                    continue
+                x = left + prev.end_us * x_scale
+                w = max(1.0, gap_us * x_scale)
+                bar_y = row_y + 3 + sublane * sublane_h
+                tooltip = (
+                    f"bubble: {gap_us:.3f}us\\n"
+                    f"after task {prev.task_id}, before task {cur.task_id}\\n"
+                    f"{prev.end_us:.3f}us - {cur.start_us:.3f}us"
+                )
+                rows.append(
+                    f'<g class="bubble" tabindex="0" data-kind="bubble" '
+                    f'data-gap="{gap_us:.6f} us" data-start="{prev.end_us:.6f} us" '
+                    f'data-end="{cur.start_us:.6f} us" data-slot="{html.escape(label)}" '
+                    f'data-prev="task {prev.task_id}" data-next="task {cur.task_id}">'
+                    f'<title>{html.escape(tooltip)}</title>'
+                    f'<rect class="gap" x="{x:.2f}" y="{bar_y:.2f}" width="{w:.2f}" height="11" rx="2" />'
+                    f'</g>'
+                )
         for task, sublane in packed:
             x = left + task.start_us * x_scale
             w = max(1.0, (task.end_us - task.start_us) * x_scale)
@@ -259,13 +306,17 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
     svg {{ display: block; min-width: {width}px; }}
     .grid {{ stroke: #e3e8f0; stroke-width: 1; }}
     .tick, .row-meta {{ fill: #667085; font-size: 11px; }}
+    .iter-marker {{ stroke: #111827; stroke-width: 3; opacity: .82; }}
+    .iter-marker-label {{ fill: #111827; font-size: 12px; font-weight: 700; }}
     .row-bg {{ fill: #fbfcfe; stroke: #edf1f6; }}
     .row-label {{ fill: #111827; font-size: 12px; font-weight: 650; }}
     .bar {{ stroke: rgba(17,24,39,.24); stroke-width: .5; opacity: .86; }}
-    .task {{ cursor: pointer; outline: none; }}
+    .task, .bubble {{ cursor: pointer; outline: none; }}
     .task:focus .bar, .task.selected .bar {{ stroke: #111827; stroke-width: 1.8; opacity: 1; }}
-    .bar.mesh {{ fill: #0f766e; }}
-    .bar.clos {{ fill: #2563eb; }}
+    .bubble:focus .gap, .bubble.selected .gap {{ stroke: #111827; stroke-width: 1.8; opacity: 1; }}
+    .bar.mesh {{ fill: #db2777; }}
+    .bar.clos {{ fill: #db2777; }}
+    .gap {{ fill: #22c55e; stroke: rgba(17,24,39,.22); stroke-width: .5; opacity: .56; }}
     .bar-label {{ fill: #fff; font-size: 9px; pointer-events: none; }}
     .legend {{ display: flex; gap: 16px; color: #475467; font-size: 12px; margin-top: 10px; }}
     .swatch {{ display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 5px; }}
@@ -291,12 +342,13 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
   <div class="panel">
     <svg width="{width}" height="{height}" role="img" aria-label="{html.escape(title)}">
       {''.join(ticks)}
+      {''.join(marker_rows)}
       {''.join(rows)}
     </svg>
   </div>
   <div class="legend">
-    <span><span class="swatch" style="background:#0f766e"></span>mesh 组内 task</span>
-    <span><span class="swatch" style="background:#2563eb"></span>clos 跨组 task</span>
+    <span><span class="swatch" style="background:#db2777"></span>真实数据流 task</span>
+    <span><span class="swatch" style="background:#22c55e"></span>同一逻辑行上的空泡</span>
   </div>
   <section class="details" aria-live="polite">
     <h2>Task detail</h2>
@@ -318,14 +370,28 @@ def render_html(case_dir: Path, tasks: list[Task], rank: int, group_size: int, c
     ['throughput', 'Throughput'],
   ];
   function selectTask(node) {{
-    document.querySelectorAll('.task.selected').forEach((el) => el.classList.remove('selected'));
+    document.querySelectorAll('.task.selected, .bubble.selected').forEach((el) => el.classList.remove('selected'));
     node.classList.add('selected');
+    if (node.dataset.kind === 'bubble') {{
+      detailGrid.innerHTML = [
+        ['slot', 'Slot'],
+        ['start', 'Start'],
+        ['end', 'End'],
+        ['gap', 'Bubble'],
+        ['prev', 'After'],
+        ['next', 'Before'],
+      ].map(([key, label]) => {{
+        const value = node.dataset[key] || '-';
+        return `<div class="detail-item"><div class="detail-label">${{label}}</div><div class="detail-value">${{value}}</div></div>`;
+      }}).join('');
+      return;
+    }}
     detailGrid.innerHTML = fields.map(([key, label]) => {{
       const value = node.dataset[key] || '-';
       return `<div class="detail-item"><div class="detail-label">${{label}}</div><div class="detail-value">${{value}}</div></div>`;
     }}).join('');
   }}
-  document.querySelectorAll('.task').forEach((node) => {{
+  document.querySelectorAll('.task, .bubble').forEach((node) => {{
     node.addEventListener('click', () => selectTask(node));
     node.addEventListener('keydown', (event) => {{
       if (event.key === 'Enter' || event.key === ' ') {{
@@ -366,6 +432,24 @@ def main() -> int:
         default="logical",
         help="logical uses MeshClosV3 logical thread mapping; priority-plane maps cross-rank priority 3/4/5/6 to clos-thread[0..3].",
     )
+    parser.add_argument(
+        "--sublane-epsilon-us",
+        type=float,
+        default=5.0,
+        help="Do not split a row into visual sublanes for overlaps up to this duration.",
+    )
+    parser.add_argument(
+        "--marker-us",
+        type=float,
+        action="append",
+        default=[],
+        help="Draw a thick vertical marker at this timestamp. Can be repeated.",
+    )
+    parser.add_argument(
+        "--marker-label",
+        default="iter1 start",
+        help="Label used for --marker-us vertical markers.",
+    )
     parser.add_argument("--title")
     args = parser.parse_args()
 
@@ -397,7 +481,18 @@ def main() -> int:
 
     title = args.title or f"Rank {args.rank} V3 Logical Timeline"
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(render_html(case_dir, tasks, args.rank, args.group_size, clos_channels, title))
+    args.output.write_text(
+        render_html(
+            case_dir,
+            tasks,
+            args.rank,
+            args.group_size,
+            clos_channels,
+            title,
+            args.sublane_epsilon_us,
+            [(marker, args.marker_label) for marker in args.marker_us],
+        )
+    )
     print(f"wrote {args.output}")
     print(f"rank={args.rank} tasks={len(tasks)} clos_channels={clos_channels}")
     return 0

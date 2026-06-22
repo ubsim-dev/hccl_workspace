@@ -22,7 +22,9 @@ ALGORITHM_LABELS = {
     "baseline": "Baseline Mesh1D full-TP",
     "matrix": "Matrix strict",
     "closv3": "MeshClos V3 strict (XOR)",
+    "closv3-plane": "MeshClos V3 plane-step (XOR)",
 }
+ALGORITHM_ORDER = ("baseline", "matrix", "closv3", "closv3-plane")
 
 
 def load_rows(path: Path) -> list[dict[str, str]]:
@@ -48,6 +50,8 @@ def single_rank_gbps(row: dict[str, str]) -> float:
 
 
 def profile_name(row: dict[str, str]) -> str:
+    if row["algorithm"] == "closv3-plane":
+        return f"ns3ub-ubx16-a2av-gradient-planestep-{row['scenario']}-closv3-rank0-profile.html"
     return f"ns3ub-ubx16-a2av-gradient-{row['scenario']}-{row['algorithm']}-rank0-profile.html"
 
 
@@ -125,7 +129,9 @@ def table_rows(rows: list[dict[str, str]]) -> str:
     for scenario in sorted(grouped, key=lambda s: float(grouped[s]["baseline"]["max_over_avg"])):
         algs = grouped[scenario]
         baseline_g = single_rank_gbps(algs["baseline"])
-        for algorithm in ("baseline", "matrix", "closv3"):
+        for algorithm in ALGORITHM_ORDER:
+            if algorithm not in algs:
+                continue
             row = algs[algorithm]
             gbps = single_rank_gbps(row)
             vs = 0.0 if algorithm == "baseline" else gbps / baseline_g - 1.0
@@ -158,6 +164,7 @@ def summary_rows(rows: list[dict[str, str]]) -> str:
         baseline = single_rank_gbps(algs["baseline"])
         matrix = single_rank_gbps(algs["matrix"])
         clos = single_rank_gbps(algs["closv3"])
+        clos_plane = single_rank_gbps(algs["closv3-plane"]) if "closv3-plane" in algs else 0.0
         chunks.append(
             f"""          <tr>
             <td>{float(algs['baseline']['max_over_avg']):.1f}x</td>
@@ -165,8 +172,10 @@ def summary_rows(rows: list[dict[str, str]]) -> str:
             <td>{baseline:.2f}</td>
             <td>{matrix:.2f}</td>
             <td>{clos:.2f}</td>
+            <td>{clos_plane:.2f}</td>
             <td class="{ 'good' if matrix >= baseline else 'bad' }">{pct(matrix / baseline - 1.0)}</td>
             <td class="{ 'good' if clos >= baseline else 'bad' }">{pct(clos / baseline - 1.0)}</td>
+            <td class="{ 'good' if clos_plane >= baseline else 'bad' }">{pct(clos_plane / baseline - 1.0) if clos_plane else '-'}</td>
           </tr>"""
         )
     return "\n".join(chunks)
@@ -180,6 +189,7 @@ def render_report(rows: list[dict[str, str]]) -> str:
     r2 = by_ratio[2.0]
     baseline_drop = 1.0 - single_rank_gbps(r2["baseline"]) / single_rank_gbps(r1["baseline"])
     clos_drop = 1.0 - single_rank_gbps(r2["closv3"]) / single_rank_gbps(r1["closv3"])
+    clos_plane_drop = 1.0 - single_rank_gbps(r2["closv3-plane"]) / single_rank_gbps(r1["closv3-plane"])
     matrix_drop = 1.0 - single_rank_gbps(r2["matrix"]) / single_rank_gbps(r1["matrix"])
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -226,8 +236,8 @@ def render_report(rows: list[dict[str, str]]) -> str:
   <div class="metrics">
     <div class="metric"><span>baseline 退化</span><strong>{baseline_drop * 100:.1f}%</strong><span>max/avg 1.0x → 2.0x</span></div>
     <div class="metric"><span>matrix 退化</span><strong class="bad">{matrix_drop * 100:.1f}%</strong><span>固定轮次更敏感</span></div>
-    <div class="metric"><span>V3 退化</span><strong class="bad">{clos_drop * 100:.1f}%</strong><span>固定平面最敏感</span></div>
-    <div class="metric"><span>2.0x V3 vs baseline</span><strong class="bad">{pct(single_rank_gbps(r2['closv3']) / single_rank_gbps(r2['baseline']) - 1.0)}</strong><span>同一不均衡度下</span></div>
+    <div class="metric"><span>V3 thread 退化</span><strong class="bad">{clos_drop * 100:.1f}%</strong><span>无 step 空泡模型</span></div>
+    <div class="metric"><span>V3 plane-step 退化</span><strong class="bad">{clos_plane_drop * 100:.1f}%</strong><span>带同平面空泡模型</span></div>
   </div>
 
   <div class="layout">
@@ -235,9 +245,9 @@ def render_report(rows: list[dict[str, str]]) -> str:
       <h2>结论</h2>
       <ul>
         <li>均匀 1.0x 只作为 sanity check：三种算法都接近 strict 单 TP 网络上限，baseline 单 rank 为 {single_rank_gbps(r1['baseline']):.2f} GB/s，V3 为 {single_rank_gbps(r1['closv3']):.2f} GB/s，差距只有 {abs(single_rank_gbps(r1['closv3']) / single_rank_gbps(r1['baseline']) - 1.0) * 100:.1f}%。</li>
-        <li>不均衡一旦增加，退化速度明显分化：max/avg=1.2x 时 baseline 仍有 {single_rank_gbps(by_ratio[1.2]['baseline']):.2f} GB/s，V3 降到 {single_rank_gbps(by_ratio[1.2]['closv3']):.2f} GB/s，相对 baseline 低 {abs(single_rank_gbps(by_ratio[1.2]['closv3']) / single_rank_gbps(by_ratio[1.2]['baseline']) - 1.0) * 100:.1f}%。</li>
-        <li>max/avg=2.0x 时 baseline 从均匀场景退化 {baseline_drop * 100:.1f}%，matrix 退化 {matrix_drop * 100:.1f}%，V3 退化 {clos_drop * 100:.1f}%；V3 同场景相对 baseline 低 {abs(single_rank_gbps(r2['closv3']) / single_rank_gbps(r2['baseline']) - 1.0) * 100:.1f}%。</li>
-        <li>阶段性结论：baseline 对 peer 粒度不均衡更鲁棒；matrix/V3 的固定轮次、固定平面映射在均匀 AllToAll 下有效，但在 AllToAllV 中容易把大流串到同一逻辑通道上，形成拖尾。</li>
+        <li>不均衡一旦增加，退化速度明显分化：max/avg=1.2x 时 baseline 仍有 {single_rank_gbps(by_ratio[1.2]['baseline']):.2f} GB/s，V3 thread 模型为 {single_rank_gbps(by_ratio[1.2]['closv3']):.2f} GB/s，V3 plane-step 模型为 {single_rank_gbps(by_ratio[1.2]['closv3-plane']):.2f} GB/s。</li>
+        <li>max/avg=2.0x 时 baseline 从均匀场景退化 {baseline_drop * 100:.1f}%，matrix 退化 {matrix_drop * 100:.1f}%，V3 thread 退化 {clos_drop * 100:.1f}%，V3 plane-step 退化 {clos_plane_drop * 100:.1f}%。</li>
+        <li>阶段性结论：baseline 对 peer 粒度不均衡更鲁棒；matrix/V3 的固定轮次、固定平面映射在均匀 AllToAll 下有效，但在 AllToAllV 中容易把大流串到同一逻辑通道上，形成拖尾。plane-step profile 里的绿色条表示同一 clos 平面 step 间等待造成的空泡。</li>
         <li>下一步优化方向应从“均匀场景提带宽”转为“大流切分、size-aware 平面分配、按流量重排 peer 顺序”，目标是降低不均衡场景的尾部 makespan。</li>
       </ul>
     </section>
@@ -245,7 +255,7 @@ def render_report(rows: list[dict[str, str]]) -> str:
     <section>
       <h2>退化趋势</h2>
       <table>
-        <thead><tr><th>max/avg</th><th>pair CV</th><th>Baseline 单 rank GB/s</th><th>Matrix 单 rank GB/s</th><th>V3 单 rank GB/s</th><th>Matrix vs baseline</th><th>V3 vs baseline</th></tr></thead>
+        <thead><tr><th>max/avg</th><th>pair CV</th><th>Baseline 单 rank GB/s</th><th>Matrix 单 rank GB/s</th><th>V3 thread GB/s</th><th>V3 plane-step GB/s</th><th>Matrix vs baseline</th><th>V3 thread vs baseline</th><th>V3 plane vs baseline</th></tr></thead>
         <tbody>
 {summary_rows(rows)}
         </tbody>

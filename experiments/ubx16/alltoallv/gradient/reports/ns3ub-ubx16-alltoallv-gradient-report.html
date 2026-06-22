@@ -43,8 +43,8 @@
   <div class="metrics">
     <div class="metric"><span>baseline 退化</span><strong>14.9%</strong><span>max/avg 1.0x → 2.0x</span></div>
     <div class="metric"><span>matrix 退化</span><strong class="bad">42.0%</strong><span>固定轮次更敏感</span></div>
-    <div class="metric"><span>V3 退化</span><strong class="bad">39.5%</strong><span>固定平面最敏感</span></div>
-    <div class="metric"><span>2.0x V3 vs baseline</span><strong class="bad">-28.2%</strong><span>同一不均衡度下</span></div>
+    <div class="metric"><span>V3 thread 退化</span><strong class="bad">39.5%</strong><span>无 step 空泡模型</span></div>
+    <div class="metric"><span>V3 plane-step 退化</span><strong class="bad">40.7%</strong><span>带同平面空泡模型</span></div>
   </div>
 
   <div class="layout">
@@ -52,9 +52,9 @@
       <h2>结论</h2>
       <ul>
         <li>均匀 1.0x 只作为 sanity check：三种算法都接近 strict 单 TP 网络上限，baseline 单 rank 为 238.69 GB/s，V3 为 241.07 GB/s，差距只有 1.0%。</li>
-        <li>不均衡一旦增加，退化速度明显分化：max/avg=1.2x 时 baseline 仍有 230.44 GB/s，V3 降到 201.63 GB/s，相对 baseline 低 12.5%。</li>
-        <li>max/avg=2.0x 时 baseline 从均匀场景退化 14.9%，matrix 退化 42.0%，V3 退化 39.5%；V3 同场景相对 baseline 低 28.2%。</li>
-        <li>阶段性结论：baseline 对 peer 粒度不均衡更鲁棒；matrix/V3 的固定轮次、固定平面映射在均匀 AllToAll 下有效，但在 AllToAllV 中容易把大流串到同一逻辑通道上，形成拖尾。</li>
+        <li>不均衡一旦增加，退化速度明显分化：max/avg=1.2x 时 baseline 仍有 230.44 GB/s，V3 thread 模型为 201.63 GB/s，V3 plane-step 模型为 210.66 GB/s。</li>
+        <li>max/avg=2.0x 时 baseline 从均匀场景退化 14.9%，matrix 退化 42.0%，V3 thread 退化 39.5%，V3 plane-step 退化 40.7%。</li>
+        <li>阶段性结论：baseline 对 peer 粒度不均衡更鲁棒；matrix/V3 的固定轮次、固定平面映射在均匀 AllToAll 下有效，但在 AllToAllV 中容易把大流串到同一逻辑通道上，形成拖尾。plane-step profile 里的绿色条表示同一 clos 平面 step 间等待造成的空泡。</li>
         <li>下一步优化方向应从“均匀场景提带宽”转为“大流切分、size-aware 平面分配、按流量重排 peer 顺序”，目标是降低不均衡场景的尾部 makespan。</li>
       </ul>
     </section>
@@ -62,7 +62,7 @@
     <section>
       <h2>退化趋势</h2>
       <table>
-        <thead><tr><th>max/avg</th><th>pair CV</th><th>Baseline 单 rank GB/s</th><th>Matrix 单 rank GB/s</th><th>V3 单 rank GB/s</th><th>Matrix vs baseline</th><th>V3 vs baseline</th></tr></thead>
+        <thead><tr><th>max/avg</th><th>pair CV</th><th>Baseline 单 rank GB/s</th><th>Matrix 单 rank GB/s</th><th>V3 thread GB/s</th><th>V3 plane-step GB/s</th><th>Matrix vs baseline</th><th>V3 thread vs baseline</th><th>V3 plane vs baseline</th></tr></thead>
         <tbody>
           <tr>
             <td>1.0x</td>
@@ -70,6 +70,8 @@
             <td>238.69</td>
             <td>241.07</td>
             <td>241.07</td>
+            <td>241.07</td>
+            <td class="good">+1.0%</td>
             <td class="good">+1.0%</td>
             <td class="good">+1.0%</td>
           </tr>
@@ -79,8 +81,10 @@
             <td>230.44</td>
             <td>211.15</td>
             <td>201.63</td>
+            <td>210.66</td>
             <td class="bad">-8.4%</td>
             <td class="bad">-12.5%</td>
+            <td class="bad">-8.6%</td>
           </tr>
           <tr>
             <td>1.5x</td>
@@ -88,8 +92,10 @@
             <td>218.99</td>
             <td>175.68</td>
             <td>164.54</td>
+            <td>178.07</td>
             <td class="bad">-19.8%</td>
             <td class="bad">-24.9%</td>
+            <td class="bad">-18.7%</td>
           </tr>
           <tr>
             <td>2.0x</td>
@@ -97,8 +103,10 @@
             <td>203.20</td>
             <td>139.89</td>
             <td>145.80</td>
+            <td>143.03</td>
             <td class="bad">-31.2%</td>
             <td class="bad">-28.2%</td>
+            <td class="bad">-29.6%</td>
           </tr>
         </tbody>
       </table>
@@ -154,6 +162,20 @@
             <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-max1p0x-closv3-rank0-profile.html">rank0</a></td>
           </tr>
           <tr>
+            <td>1.0x</td>
+            <td>MeshClos V3 plane-step (XOR)</td>
+            <td>8.00</td>
+            <td>8.00</td>
+            <td>8.00</td>
+            <td>0.000</td>
+            <td>80.0%</td>
+            <td>521.962</td>
+            <td>241.07</td>
+            <td>241.07</td>
+            <td class="good">+1.0%</td>
+            <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-planestep-max1p0x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
             <td>1.2x</td>
             <td>Baseline Mesh1D full-TP</td>
             <td>6.61</td>
@@ -194,6 +216,20 @@
             <td>213.31</td>
             <td class="bad">-12.5%</td>
             <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-max1p2x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>1.2x</td>
+            <td>MeshClos V3 plane-step (XOR)</td>
+            <td>6.61</td>
+            <td>8.11</td>
+            <td>9.60</td>
+            <td>0.114</td>
+            <td>80.0%</td>
+            <td>605.278</td>
+            <td>210.66</td>
+            <td>210.66</td>
+            <td class="bad">-8.6%</td>
+            <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-planestep-max1p2x-closv3-rank0-profile.html">rank0</a></td>
           </tr>
           <tr>
             <td>1.5x</td>
@@ -238,6 +274,20 @@
             <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-max1p5x-closv3-rank0-profile.html">rank0</a></td>
           </tr>
           <tr>
+            <td>1.5x</td>
+            <td>MeshClos V3 plane-step (XOR)</td>
+            <td>4.53</td>
+            <td>8.27</td>
+            <td>12.00</td>
+            <td>0.279</td>
+            <td>80.0%</td>
+            <td>730.182</td>
+            <td>178.07</td>
+            <td>178.07</td>
+            <td class="bad">-18.7%</td>
+            <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-planestep-max1p5x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
             <td>2.0x</td>
             <td>Baseline Mesh1D full-TP</td>
             <td>1.07</td>
@@ -278,6 +328,20 @@
             <td>145.80</td>
             <td class="bad">-28.2%</td>
             <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-max2p0x-closv3-rank0-profile.html">rank0</a></td>
+          </tr>
+          <tr>
+            <td>2.0x</td>
+            <td>MeshClos V3 plane-step (XOR)</td>
+            <td>1.07</td>
+            <td>8.53</td>
+            <td>16.00</td>
+            <td>0.540</td>
+            <td>80.0%</td>
+            <td>938.373</td>
+            <td>143.03</td>
+            <td>143.03</td>
+            <td class="bad">-29.6%</td>
+            <td><a href="../profiles/ns3ub-ubx16-a2av-gradient-planestep-max2p0x-closv3-rank0-profile.html">rank0</a></td>
           </tr>
         </tbody>
       </table>

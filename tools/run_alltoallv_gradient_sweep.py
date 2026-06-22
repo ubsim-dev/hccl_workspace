@@ -133,7 +133,12 @@ def run_cmd(cmd: list[str], cwd: Path = REPO_ROOT) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
-def generate_algorithm_case(algorithm: str, output_case: Path, per_rank_bytes: int) -> None:
+def generate_algorithm_case(
+    algorithm: str,
+    output_case: Path,
+    per_rank_bytes: int,
+    closv3_dependency_mode: str,
+) -> None:
     if output_case.exists():
         shutil.rmtree(output_case)
     size_arg = str(per_rank_bytes)
@@ -192,7 +197,7 @@ def generate_algorithm_case(algorithm: str, output_case: Path, per_rank_bytes: i
             "--traffic-order",
             "v3-logical",
             "--dependency-mode",
-            "v3-thread-serial",
+            closv3_dependency_mode,
         ]
     else:
         raise ValueError(f"unknown algorithm {algorithm}")
@@ -293,6 +298,12 @@ def main() -> int:
     parser.add_argument("--max-over-avg", nargs="+", type=float, default=[1.0, 1.2, 1.5, 2.0])
     parser.add_argument("--algorithms", nargs="+", default=["baseline", "matrix", "closv3"])
     parser.add_argument("--per-rank-bytes", default="128MB")
+    parser.add_argument(
+        "--closv3-dependency-mode",
+        choices=("none", "v3-thread-serial", "v3-plane-step-barrier", "v3-step-barrier"),
+        default="v3-thread-serial",
+        help="Dependency model used when generating closv3 cases.",
+    )
     parser.add_argument("--case-prefix", default=str(DEFAULT_BASE / "cases/generated_topology_ubx16_a2av_gradient"))
     parser.add_argument(
         "--summary",
@@ -312,7 +323,7 @@ def main() -> int:
         sizes = gradient_sizes(per_rank_bytes, ratio)
         for algorithm in args.algorithms:
             case_dir = REPO_ROOT / f"{args.case_prefix}_{scenario}_{algorithm}_{suffix}"
-            generate_algorithm_case(algorithm, case_dir, per_rank_bytes)
+            generate_algorithm_case(algorithm, case_dir, per_rank_bytes, args.closv3_dependency_mode)
             patch_traffic(case_dir, sizes)
             if not args.no_run:
                 run_sim(case_dir, args.docker_container, args.mtp_threads)

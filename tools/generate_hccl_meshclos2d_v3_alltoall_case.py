@@ -3,7 +3,7 @@
 
 strict:
   - intra group pairs use channels[0], matching Mesh2DV3.
-  - inter group pairs use the V3 shift/link schedule, spreading peers over
+  - inter group pairs use the V3 XOR stage/link schedule, spreading peers over
     channel indices.
 
 ideal:
@@ -13,8 +13,10 @@ Traffic is emitted in V3 logical order. By default all tasks stay in one ns-3
 phase because the V3 executor has one stage and the per-link step loop is not a
 proven global barrier. Use --dependency-mode v3-thread-serial to model each
 algorithm thread/channel as a serial queue while keeping different threads
-parallel. Use --dependency-mode v3-step-barrier as a diagnostic mode that
-keeps Mesh2D tasks independent and serializes MeshClos logical steps globally.
+parallel. Use --dependency-mode v3-plane-step-barrier to make each clos plane
+advance step by step independently. Use --dependency-mode v3-step-barrier as a
+diagnostic mode that keeps Mesh2D tasks independent and serializes MeshClos
+logical steps globally.
 """
 
 from __future__ import annotations
@@ -221,14 +223,18 @@ def write_v3_logical_traffic(
             previous = last_task_by_unit.get(unit)
             depend_on = "" if previous is None else str(previous)
             last_task_by_unit[unit] = task_id
-        elif dependency_mode == "v3-step-barrier":
+        elif dependency_mode in ("v3-plane-step-barrier", "v3-step-barrier"):
             if barrier_phase is None:
-                raise ValueError("v3-step-barrier requires a barrier phase")
+                raise ValueError(f"{dependency_mode} requires a barrier phase")
             if unit[0] == "mesh":
                 # Mesh tasks use separate host-host ports and are not part of the
                 # MeshClos step-barrier diagnostic.
                 phase_id = task_id
                 depend_on = ""
+            elif dependency_mode == "v3-plane-step-barrier":
+                phase_id = barrier_phase
+                previous = phase_id - clos_channel_count
+                depend_on = "" if previous < mesh_task_count else str(previous)
             else:
                 phase_id = barrier_phase
                 depend_on = "" if phase_id == mesh_task_count else str(phase_id - 1)
@@ -293,12 +299,16 @@ def write_v3_logical_traffic(
                             continue
                         if hash_value % clos_channel_count != link_idx:
                             continue
+                        if dependency_mode == "v3-plane-step-barrier":
+                            barrier_phase = mesh_task_count + step * clos_channel_count + link_idx
+                        else:
+                            barrier_phase = mesh_task_count + step
                         write_row(
                             writer,
                             src_alg,
                             dst_alg,
                             ("clos", src_alg, link_idx),
-                            mesh_task_count + step,
+                            barrier_phase,
                         )
 
     expected = rank_count * (rank_count - 1)
@@ -473,11 +483,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--dependency-mode",
-        choices=("none", "v3-thread-serial", "v3-step-barrier"),
+        choices=("none", "v3-thread-serial", "v3-plane-step-barrier", "v3-step-barrier"),
         default="none",
         help="none keeps all generated V3 tasks in one runnable phase; "
         "v3-thread-serial chains tasks on the same source algorithm thread/channel "
-        "using phaseId/dependOnPhases; v3-step-barrier keeps Mesh2D tasks "
+        "using phaseId/dependOnPhases; v3-plane-step-barrier serializes MeshClos "
+        "steps independently per clos plane; v3-step-barrier keeps Mesh2D tasks "
         "independent and makes each MeshClos step a global barrier.",
     )
     parser.add_argument("--priority", type=int, default=7)
