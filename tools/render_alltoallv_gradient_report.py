@@ -21,7 +21,7 @@ UBX16_SOURCE_CASE = REPO_ROOT / "experiments/topologies/ubx16/generated_topology
 ALGORITHM_LABELS = {
     "baseline": "Baseline Mesh1D full-TP",
     "matrix": "Matrix strict",
-    "closv3": "MeshClos V3 strict",
+    "closv3": "MeshClos V3 strict (XOR)",
 }
 
 
@@ -220,7 +220,7 @@ def render_report(rows: list[dict[str, str]]) -> str:
 <main>
   <header>
     <h1>UBX16 AllToAllV 不均衡敏感性扫描</h1>
-    <p class="muted">本阶段只证明一件事：peer 粒度不均衡变大时，baseline、matrix、MeshClos V3 的带宽分别会退化多少。HCCL AllToAllV count 按 128MiB/rank 设置，并保留 self slot 参与等差分布计算；ns-3 只建模网络 peer 流，所以 self slot 会被丢弃。15 条网络 peer 流按环形 offset 形成等差数列；扫描参数是包含 self slot 的最大流 / 平均流：1.0、1.2、1.5、2.0。主指标是单 rank 有效带宽：全局网络吞吐 / 16。</p>
+    <p class="muted">本阶段只证明一件事：peer 粒度不均衡变大时，baseline、matrix、MeshClos V3 的带宽分别会退化多少。HCCL AllToAllV count 按 128MiB/rank 设置，并保留 self slot 参与等差分布计算；ns-3 只建模网络 peer 流，所以 self slot 会被丢弃。15 条网络 peer 流按环形 offset 形成等差数列；扫描参数是包含 self slot 的最大流 / 平均流：1.0、1.2、1.5、2.0。MeshClos V3 使用源码里的 XOR 编排：<code>(src ^ dst) % numStages</code> 选 step，<code>(src ^ dst) % numLinks</code> 选 link。主指标是单 rank 有效带宽：全局网络吞吐 / 16。</p>
   </header>
 
   <div class="metrics">

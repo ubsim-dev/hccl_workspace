@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UBX16 AllToAllV Snack Sweep</title>
+<style>
+body { margin: 0; background: #f6f7f9; color: #1f2937; font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { width: min(1280px, calc(100% - 40px)); margin: 28px auto 48px; }
+h1 { margin: 0 0 8px; font-size: 28px; }
+.muted { color: #667085; }
+section { background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 18px; margin-top: 14px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid #d8dee8; padding: 8px 10px; text-align: right; white-space: nowrap; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), th:nth-last-child(-n+2), td:nth-last-child(-n+2) { text-align: left; }
+th { color: #667085; font-size: 12px; background: #fbfcfe; }
+tr:last-child td { border-bottom: 0; }
+a { color: #2563eb; text-decoration: none; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.card { background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; }
+.value { font-size: 24px; font-weight: 700; }
+@media (max-width: 900px) { main { width: min(100% - 24px, 1280px); } .grid { grid-template-columns: 1fr; } table { font-size: 12px; } }
+</style>
+</head>
+<body><main>
+<h1>UBX16 AllToAllV Snack 参数扫描</h1>
+<p class="muted">输入来自 <code>tools/all2allv_snack.py</code>，seed=4，min flow=1MiB，扫描 pair max/min ratio=1.2/1.5/2.0/3.0。Snack v0/v1 使用脚本内部 actualPlane 映射为 ns3 priority 3/4/5/6，以表达 directed fixed-plane。</p>
+<div class="grid">
+  <div class="card"><div class="muted">Baseline 区间</div><div class="value">212-227 GB/s</div></div>
+  <div class="card"><div class="muted">Snack v0 区间</div><div class="value">79-88 GB/s</div></div>
+  <div class="card"><div class="muted">Snack v1 区间</div><div class="value">89-91 GB/s</div></div>
+</div>
+<section><h2>结果汇总</h2><table><thead><tr>
+<th>max/min</th><th>算法</th><th>Pair CV</th><th>Min MiB</th><th>Max MiB</th><th>Src max/min</th><th>Plane CV</th><th>Max dst-plane queue</th><th>Makespan(us)</th><th>单 rank GB/s</th><th>rank0 GB/s</th><th>Profile</th><th>Detail</th>
+</tr></thead><tbody>
+<tr><td>1.2x</td><td>baseline</td><td>0.050</td><td>1.00</td><td>1.20</td><td>1.03x</td><td>0.000</td><td>0</td><td>75.48</td><td>227.47</td><td>226.22</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_baseline_ratio1p2_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio1p2_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>1.2x</td><td>snack-v0</td><td>0.050</td><td>1.00</td><td>1.20</td><td>1.03x</td><td>0.008</td><td>6</td><td>194.13</td><td>88.44</td><td>115.74</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v0_ratio1p2_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio1p2_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>1.2x</td><td>snack-v1</td><td>0.050</td><td>1.00</td><td>1.20</td><td>1.03x</td><td>0.001</td><td>7</td><td>188.99</td><td>90.85</td><td>98.86</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v1_ratio1p2_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio1p2_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>1.5x</td><td>baseline</td><td>0.113</td><td>1.00</td><td>1.50</td><td>1.07x</td><td>0.000</td><td>0</td><td>88.37</td><td>222.78</td><td>228.22</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_baseline_ratio1p5_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio1p5_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>1.5x</td><td>snack-v0</td><td>0.113</td><td>1.00</td><td>1.50</td><td>1.07x</td><td>0.013</td><td>7</td><td>248.29</td><td>79.29</td><td>116.09</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v0_ratio1p5_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio1p5_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>1.5x</td><td>snack-v1</td><td>0.113</td><td>1.00</td><td>1.50</td><td>1.07x</td><td>0.004</td><td>8</td><td>221.70</td><td>88.80</td><td>99.29</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v1_ratio1p5_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio1p5_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>2.0x</td><td>baseline</td><td>0.188</td><td>1.00</td><td>2.00</td><td>1.11x</td><td>0.000</td><td>0</td><td>107.34</td><td>220.29</td><td>221.14</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_baseline_ratio2p0_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio2p0_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>2.0x</td><td>snack-v0</td><td>0.188</td><td>1.00</td><td>2.00</td><td>1.11x</td><td>0.022</td><td>7</td><td>297.96</td><td>79.36</td><td>115.14</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v0_ratio2p0_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio2p0_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>2.0x</td><td>snack-v1</td><td>0.188</td><td>1.00</td><td>2.00</td><td>1.11x</td><td>0.006</td><td>8</td><td>265.74</td><td>88.98</td><td>97.12</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v1_ratio2p0_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio2p0_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>3.0x</td><td>baseline</td><td>0.282</td><td>1.00</td><td>3.00</td><td>1.17x</td><td>0.000</td><td>0</td><td>148.82</td><td>212.07</td><td>217.13</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_baseline_ratio3p0_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio3p0_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>3.0x</td><td>snack-v0</td><td>0.282</td><td>1.00</td><td>3.00</td><td>1.17x</td><td>0.033</td><td>7</td><td>398.68</td><td>79.16</td><td>113.37</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v0_ratio3p0_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio3p0_seed4_1mibmin-report.html">detail</a></td></tr><tr><td>3.0x</td><td>snack-v1</td><td>0.282</td><td>1.00</td><td>3.00</td><td>1.17x</td><td>0.009</td><td>8</td><td>353.35</td><td>89.32</td><td>94.66</td><td><a href="../profiles/generated_topology_ubx16_a2av_snack_v1_ratio3p0_seed4_1mibmin-rank0-profile.html">profile</a></td><td><a href="ns3ub-ubx16-alltoallv-snack-ratio3p0_seed4_1mibmin-report.html">detail</a></td></tr>
+</tbody></table></section>
+<section><h2>结论</h2>
+<ul>
+<li>随着不均衡从 1.2x 增加到 3.0x，baseline 单 rank 带宽从 227.47 降到 212.07 GB/s，下降约 6.8%。</li>
+<li>Snack v1 基本稳定在 89 GB/s 左右，没有随更强不均衡获得收益；v0 更低，约 79-88 GB/s。</li>
+<li>v1 的 plane CV 很低，说明平面字节量分配不是主要问题；主要成本来自 source-plane 和 dest-plane 的静态依赖串行化。</li>
+<li>这个模型保留 directed plane 语义，因此没有用删除 TP 的 strict 方式；如果要对齐老 MeshClos strict，需要把正反方向 plane 约束成 pair-symmetric。</li>
+</ul>
+<p class="muted">CSV：<code>ns3ub-ubx16-alltoallv-snack-sweep-summary.csv</code></p>
+</section>
+<section><h2>原因分析</h2>
+<ul>
+<li><strong>baseline 不是单平面模型。</strong>当前 baseline 的 <code>transport_channel.csv</code> 对跨组 peer 保留 4 条 TP，同一个大 peer 流可以被 ns3-ub 的 full-TP 口径分摊到多条路径上；因此即使单条流 max/min 从 1.2x 增大到 3.0x，baseline 仍能维持 212-227 GB/s/rank。</li>
+<li><strong>snack v0/v1 是 directed fixed-plane。</strong>这里用 <code>actualPlane</code> 映射为 priority 3/4/5/6，让每个跨组 task 只命中一个平面。这可以表达脚本里的有向平面选择，但每条 peer 流天然被限制在单 TP 上，单流上限接近单平面能力。</li>
+<li><strong>主要瓶颈不是平面总量不均。</strong>v1 的 plane CV 在 1.2x/1.5x/2.0x/3.0x 下分别只有 0.001/0.004/0.006/0.009，说明四个平面的总字节量已经很均衡；但是带宽仍卡在约 89 GB/s/rank。</li>
+<li><strong>真正的代价来自静态依赖串行化。</strong>snack 对同一个 <code>source + actualPlane</code> 串发送队列，同时对同一个 <code>dest + actualPlane</code> 串接收互斥队列。表里的 <code>Max dst-plane queue</code> 到 7-8，意味着某些目的 rank 的同一平面上有 7-8 个接收 task 被串起来，makespan 被最长依赖链拉长。</li>
+<li><strong>不均衡越强，baseline 只轻微下降，snack 的 makespan 线性变长。</strong>从 1.2x 到 3.0x，baseline makespan 75.48us -> 148.82us；snack-v1 是 188.99us -> 353.35us。v1 的单 rank 带宽几乎不变，说明它已经被“单平面 + 依赖链”限制住，而不是被随机流量分布限制住。</li>
+<li><strong>和老 MeshClos strict 口径不同。</strong>老 strict 是在 <code>transport_channel.csv</code> 里对每个无向 pair 直接删到只剩 1 条 TP；而 snack 脚本里 <code>src->dst</code> 和 <code>dst->src</code> 经常选不同 plane，所以不能只靠删 TP 表达。若要严格复用老 strict 口径，需要把平面选择改成 pair-symmetric。</li>
+</ul>
+</section>
+</main></body></html>

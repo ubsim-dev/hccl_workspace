@@ -96,23 +96,7 @@ def logical_unit(src: int, dst: int, rank_count: int, group_size: int, clos_chan
         ]
         return "mesh", ordered_peers.index(dst)
 
-    group_num = rank_count // group_size
-    color_round_num = pairwise_round_num(group_num)
-    if color_round_num == 0:
-        return "clos", 0
-
-    for color_round in range(color_round_num):
-        peer_group, src_group_is_left = pair_group_in_round(group_num, src_group, color_round)
-        if peer_group != dst_group:
-            continue
-        if src_group_is_left:
-            shift = (dst_local - src_local) % group_size
-        else:
-            shift = (src_local - dst_local) % group_size
-        micro_round = shift * color_round_num + color_round
-        return "clos", micro_round % clos_channels
-
-    raise ValueError(f"rank pair {src}->{dst} is not covered by V3 group-pairwise schedule")
+    return "clos", (src ^ dst) % clos_channels
 
 
 def load_rank_tasks(
@@ -121,18 +105,27 @@ def load_rank_tasks(
     rank_count: int,
     group_size: int,
     clos_channels: int,
-    priority: int,
+    priorities: set[int],
+    unit_mode: str,
 ) -> list[Task]:
     tasks: list[Task] = []
     with (case_dir / "output" / "task_statistics.csv").open(newline="") as f:
         for row in csv.DictReader(f):
-            if int(row["priority"]) != priority:
+            if int(row["priority"]) not in priorities:
                 continue
             src = int(row["sourceNodeId"])
             if src != rank:
                 continue
             dst = int(row["destNodeId"])
-            unit_kind, unit_idx = logical_unit(src, dst, rank_count, group_size, clos_channels)
+            priority = int(row["priority"])
+            if (
+                unit_mode == "priority-plane"
+                and src // group_size != dst // group_size
+                and priority != 7
+            ):
+                unit_kind, unit_idx = "clos", priority - 3
+            else:
+                unit_kind, unit_idx = logical_unit(src, dst, rank_count, group_size, clos_channels)
             tasks.append(
                 Task(
                     task_id=int(row["taskId"]),
@@ -360,7 +353,19 @@ def main() -> int:
         help="Optional full-topology source case used to infer clos channel count.",
     )
     parser.add_argument("--clos-channels", type=int)
-    parser.add_argument("--priority", type=int, default=7)
+    parser.add_argument("--priority", type=int, default=7, help="Single priority to render. Kept for compatibility.")
+    parser.add_argument(
+        "--priorities",
+        type=int,
+        nargs="+",
+        help="Render tasks whose priority is in this set. Overrides --priority.",
+    )
+    parser.add_argument(
+        "--unit-mode",
+        choices=("logical", "priority-plane"),
+        default="logical",
+        help="logical uses MeshClosV3 logical thread mapping; priority-plane maps cross-rank priority 3/4/5/6 to clos-thread[0..3].",
+    )
     parser.add_argument("--title")
     args = parser.parse_args()
 
@@ -377,7 +382,16 @@ def main() -> int:
         else:
             clos_channels = args.group_size
 
-    tasks = load_rank_tasks(case_dir, args.rank, args.rank_count, args.group_size, clos_channels, args.priority)
+    priorities = set(args.priorities) if args.priorities else {args.priority}
+    tasks = load_rank_tasks(
+        case_dir,
+        args.rank,
+        args.rank_count,
+        args.group_size,
+        clos_channels,
+        priorities,
+        args.unit_mode,
+    )
     if not tasks:
         raise ValueError(f"no TX tasks for rank {args.rank} in {case_dir}")
 

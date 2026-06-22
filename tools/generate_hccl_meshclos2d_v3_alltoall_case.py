@@ -276,34 +276,30 @@ def write_v3_logical_traffic(
                     neighbor_idx,
                 )
 
-        # MeshClosV3: for step then linkIdx, each source rank maps to one peer.
-        # This is the source algorithm order, but no phase dependency is added.
+        # MeshClosV3: source code uses an XOR hash to select stage and link:
+        #   stage = (myRankIdx ^ dstRankIdx) % numStages
+        #   link  = (myRankIdx ^ dstRankIdx) % numLinks
+        # Iterate in stage/link order and emit peers whose hash matches.
         for step in range(inter_steps):
             for link_idx in range(clos_channel_count):
-                micro_round = step * clos_channel_count + link_idx
-                if color_round_num == 0:
-                    continue
-                shift = micro_round // color_round_num
-                color_round = micro_round % color_round_num
-                if shift >= group_size:
-                    continue
                 for src_alg in range(rank_count):
-                    my_group, my_local = divmod(src_alg, group_size)
-                    peer_group, my_group_is_left = pair_group_in_round(group_num, my_group, color_round)
-                    if peer_group == INVALID_GROUP_ID:
-                        continue
-                    if my_group_is_left:
-                        connected_local = (my_local + shift) % group_size
-                    else:
-                        connected_local = (my_local + group_size - shift % group_size) % group_size
-                    dst_alg = peer_group * group_size + connected_local
-                    write_row(
-                        writer,
-                        src_alg,
-                        dst_alg,
-                        ("clos", src_alg, link_idx),
-                        mesh_task_count + step,
-                    )
+                    for dst_alg in range(rank_count):
+                        if dst_alg == src_alg:
+                            continue
+                        if src_alg // group_size == dst_alg // group_size:
+                            continue
+                        hash_value = src_alg ^ dst_alg
+                        if hash_value % inter_steps != step:
+                            continue
+                        if hash_value % clos_channel_count != link_idx:
+                            continue
+                        write_row(
+                            writer,
+                            src_alg,
+                            dst_alg,
+                            ("clos", src_alg, link_idx),
+                            mesh_task_count + step,
+                        )
 
     expected = rank_count * (rank_count - 1)
     if task_id != expected:
@@ -402,23 +398,7 @@ def selected_strict_index(
     if a_group == b_group:
         return 0
 
-    group_num = rank_count // group_size
-    color_round_num = pairwise_round_num(group_num)
-    if color_round_num == 0:
-        return 0
-
-    for color_round in range(color_round_num):
-        peer_group, a_group_is_left = pair_group_in_round(group_num, a_group, color_round)
-        if peer_group != b_group:
-            continue
-        if a_group_is_left:
-            shift = (b_local - a_local) % group_size
-        else:
-            shift = (a_local - b_local) % group_size
-        micro_round = shift * color_round_num + color_round
-        return micro_round % channel_count
-
-    raise ValueError(f"groups {a_group} and {b_group} are never paired")
+    return (a_alg ^ b_alg) % channel_count
 
 
 def selected_strict_row(
