@@ -43,6 +43,12 @@ def pct(value: float) -> str:
     return f"{sign}{value * 100:.1f}%"
 
 
+def profile_href(row: dict[str, str]) -> str:
+    if row["algorithm"] in ("baseline", "closv3"):
+        return f"../../gradient/profiles/ns3ub-ubx16-a2av-gradient-{row['scenario']}-{row['algorithm']}-rank0-profile.html"
+    return f"../profiles/{Path(row['case']).name}-rank0-profile.html"
+
+
 def rows_by_ratio(base_rows: list[dict[str, str]], hybrid_rows: list[dict[str, str]]) -> dict[float, dict[str, dict[str, str]]]:
     grouped: dict[float, dict[str, dict[str, str]]] = {}
     for row in base_rows:
@@ -79,7 +85,7 @@ def summary_table(grouped: dict[float, dict[str, dict[str, str]]]) -> str:
   <td>{float(row['makespan_us']):.3f}</td>
   <td>{gbps:.2f}</td>
   <td class="{'good' if gbps >= baseline else 'bad'}">{pct(gbps / baseline - 1.0)}</td>
-  <td><code>{html.escape(Path(row['case']).name)}</code></td>
+  <td><a href="{html.escape(profile_href(row))}">{html.escape(Path(row['case']).name)}</a></td>
 </tr>"""
             )
     return "\n".join(chunks)
@@ -138,6 +144,8 @@ def render(grouped: dict[float, dict[str, dict[str, str]]]) -> str:
     th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), th:last-child, td:last-child {{ text-align:left; }}
     th {{ color:var(--muted); font-size:12px; background:#fbfcfe; }}
     tr:last-child td {{ border-bottom:0; }}
+    a {{ color:#2563eb; text-decoration:none; font-weight:650; }}
+    a:hover {{ text-decoration:underline; }}
     code {{ background:#eef2f7; border-radius:5px; padding:1px 5px; }}
     .good {{ color:var(--good); }}
     .bad {{ color:var(--bad); }}

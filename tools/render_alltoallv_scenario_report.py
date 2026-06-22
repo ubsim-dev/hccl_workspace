@@ -12,7 +12,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REPORT_DIR = REPO_ROOT / "experiments/ubx16/alltoallv/scenarios/reports"
+BASE = REPO_ROOT / "experiments/ubx16/alltoallv/scenarios"
+REPORT_DIR = BASE / "reports"
+PROFILE_DIR = BASE / "profiles"
 SUMMARY = REPORT_DIR / "ns3ub-ubx16-alltoallv-scenarios-summary.csv"
 REPORT = REPORT_DIR / "ns3ub-ubx16-alltoallv-scenarios-report.html"
 UBX16_SOURCE_CASE = REPO_ROOT / "experiments/topologies/ubx16/generated_topology_ubx16"
@@ -109,10 +111,11 @@ def profile_filename(profile: Profile) -> str:
 
 def render_profiles(rows_by_scenario: dict[str, dict[str, dict[str, str]]]) -> list[tuple[Profile, str]]:
     rendered: list[tuple[Profile, str]] = []
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     for profile in PROFILES:
         row = rows_by_scenario[profile.scenario][profile.algorithm]
         case = row["case"]
-        output = REPORT_DIR / profile_filename(profile)
+        output = PROFILE_DIR / profile_filename(profile)
         title = (
             f"{SCENARIO_LABELS[profile.scenario]} | "
             f"{ALGORITHM_LABELS[profile.algorithm]} | rank {profile.rank}"
@@ -164,7 +167,7 @@ def render_profiles(rows_by_scenario: dict[str, dict[str, dict[str, str]]]) -> l
                 title,
             ]
         run(cmd)
-        rendered.append((profile, output.name))
+        rendered.append((profile, f"../profiles/{output.name}"))
     return rendered
 
 
@@ -357,7 +360,7 @@ def main() -> int:
     if not args.skip_profiles:
         rendered = render_profiles(grouped)
     else:
-        rendered = [(profile, profile_filename(profile)) for profile in PROFILES]
+        rendered = [(profile, f"../profiles/{profile_filename(profile)}") for profile in PROFILES]
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_report(rows, rendered))

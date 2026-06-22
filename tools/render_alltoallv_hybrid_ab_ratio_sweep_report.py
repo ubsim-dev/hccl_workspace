@@ -35,6 +35,10 @@ def pct(value: float) -> str:
     return f"{sign}{value * 100:.1f}%"
 
 
+def profile_href(row: dict[str, str]) -> str:
+    return f"../profiles/{Path(row['case']).name}-rank0-profile.html"
+
+
 def base_refs(base_rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
     refs: dict[str, dict[str, str]] = {}
     for row in base_rows:
@@ -59,7 +63,7 @@ def table(rows: list[dict[str, str]], baseline: float) -> str:
   <td>{float(row['makespan_us']):.3f}</td>
   <td>{gbps:.2f}</td>
   <td class="{'good' if gbps >= baseline else 'bad'}">{pct(gbps / baseline - 1.0)}</td>
-  <td><code>{html.escape(Path(row['case']).name)}</code></td>
+  <td><a href="{html.escape(profile_href(row))}">{html.escape(Path(row['case']).name)}</a></td>
 </tr>"""
         )
     return "\n".join(chunks)
@@ -104,6 +108,8 @@ def render(base_rows: list[dict[str, str]], sweep_rows: list[dict[str, str]]) ->
     th:first-child, td:first-child, th:last-child, td:last-child {{ text-align:left; }}
     th {{ color:var(--muted); font-size:12px; background:#fbfcfe; }}
     tr:last-child td {{ border-bottom:0; }}
+    a {{ color:#2563eb; text-decoration:none; font-weight:650; }}
+    a:hover {{ text-decoration:underline; }}
     code {{ background:#eef2f7; border-radius:5px; padding:1px 5px; }}
     .good {{ color:var(--good); }}
     .bad {{ color:var(--bad); }}

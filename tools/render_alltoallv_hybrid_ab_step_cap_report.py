@@ -36,6 +36,10 @@ def mib(value: str | float) -> float:
     return float(value) / 1024 / 1024
 
 
+def profile_href(row: dict[str, str]) -> str:
+    return f"../profiles/{Path(row['case']).name}-rank0-profile.html"
+
+
 def baseline_ref(rows: list[dict[str, str]], alg: str) -> dict[str, str]:
     for row in rows:
         if row["scenario"] == "max2p0x" and row["algorithm"] == alg:
@@ -72,7 +76,7 @@ def render(base_rows: list[dict[str, str]], thread_rows: list[dict[str, str]], s
   <td>{sgbps:.2f}</td>
   <td class="{'good' if sgbps >= tgbps else 'bad'}">{pct(sgbps / tgbps - 1.0)}</td>
   <td class="{'good' if sgbps >= baseline else 'bad'}">{pct(sgbps / baseline - 1.0)}</td>
-  <td><code>{html.escape(Path(srow['case']).name)}</code></td>
+  <td><a href="{html.escape(profile_href(srow))}">{html.escape(Path(srow['case']).name)}</a></td>
 </tr>"""
         )
     return f"""<!doctype html>
@@ -98,6 +102,8 @@ def render(base_rows: list[dict[str, str]], thread_rows: list[dict[str, str]], s
     th, td {{ border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
     th:first-child, td:first-child, th:last-child, td:last-child {{ text-align:left; }}
     th {{ color:var(--muted); font-size:12px; background:#fbfcfe; }}
+    a {{ color:#2563eb; text-decoration:none; font-weight:650; }}
+    a:hover {{ text-decoration:underline; }}
     code {{ background:#eef2f7; border-radius:5px; padding:1px 5px; }}
     .good {{ color:var(--good); }}
     .bad {{ color:var(--bad); }}

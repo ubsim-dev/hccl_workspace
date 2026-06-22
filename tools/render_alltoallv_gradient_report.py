@@ -13,6 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASE = REPO_ROOT / "experiments/ubx16/alltoallv/gradient"
 REPORT_DIR = BASE / "reports"
+PROFILE_DIR = BASE / "profiles"
 SUMMARY = REPORT_DIR / "ns3ub-ubx16-alltoallv-gradient-summary.csv"
 REPORT = REPORT_DIR / "ns3ub-ubx16-alltoallv-gradient-report.html"
 UBX16_SOURCE_CASE = REPO_ROOT / "experiments/topologies/ubx16/generated_topology_ubx16"
@@ -48,6 +49,10 @@ def single_rank_gbps(row: dict[str, str]) -> float:
 
 def profile_name(row: dict[str, str]) -> str:
     return f"ns3ub-ubx16-a2av-gradient-{row['scenario']}-{row['algorithm']}-rank0-profile.html"
+
+
+def profile_href(row: dict[str, str]) -> str:
+    return f"../profiles/{profile_name(row)}"
 
 
 def render_profile(row: dict[str, str], output: Path) -> None:
@@ -106,10 +111,10 @@ def render_profile(row: dict[str, str], output: Path) -> None:
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
 
-def render_profiles(rows: list[dict[str, str]], report_dir: Path) -> None:
-    report_dir.mkdir(parents=True, exist_ok=True)
+def render_profiles(rows: list[dict[str, str]], profile_dir: Path) -> None:
+    profile_dir.mkdir(parents=True, exist_ok=True)
     for row in rows:
-        render_profile(row, report_dir / profile_name(row))
+        render_profile(row, profile_dir / profile_name(row))
 
 
 def table_rows(rows: list[dict[str, str]]) -> str:
@@ -137,7 +142,7 @@ def table_rows(rows: list[dict[str, str]]) -> str:
             <td>{gbps:.2f}</td>
             <td>{float(row['rank0_GBps']):.2f}</td>
             <td class="{ 'good' if vs >= 0 else 'bad' }">{pct(vs)}</td>
-            <td><a href="{profile_name(row)}">rank0</a></td>
+            <td><a href="{profile_href(row)}">rank0</a></td>
           </tr>"""
             )
     return "\n".join(chunks)
@@ -284,7 +289,7 @@ def main() -> int:
     args = parser.parse_args()
     rows = load_rows(args.summary)
     if not args.skip_profiles:
-        render_profiles(rows, args.output.parent)
+        render_profiles(rows, args.output.parent.parent / "profiles")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_report(rows))
     print(f"wrote {args.output}")

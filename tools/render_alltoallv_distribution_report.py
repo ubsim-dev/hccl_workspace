@@ -13,6 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASE = REPO_ROOT / "experiments/ubx16/alltoallv/distribution"
 REPORT_DIR = BASE / "reports"
+PROFILE_DIR = BASE / "profiles"
 SUMMARY = REPORT_DIR / "ns3ub-ubx16-alltoallv-distribution-summary.csv"
 REPORT = REPORT_DIR / "ns3ub-ubx16-alltoallv-distribution-report.html"
 UBX16_SOURCE_CASE = REPO_ROOT / "experiments/topologies/ubx16/generated_topology_ubx16"
@@ -39,6 +40,10 @@ def pct(value: float) -> str:
 
 def profile_name(row: dict[str, str]) -> str:
     return f"ns3ub-ubx16-a2av-distribution-{row['scenario']}-{row['algorithm']}-rank0-profile.html"
+
+
+def profile_href(row: dict[str, str]) -> str:
+    return f"../profiles/{profile_name(row)}"
 
 
 def render_profile(row: dict[str, str], output: Path) -> None:
@@ -84,9 +89,9 @@ def render_profile(row: dict[str, str], output: Path) -> None:
 
 
 def render_profiles(rows: list[dict[str, str]]) -> None:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     for row in rows:
-        render_profile(row, REPORT_DIR / profile_name(row))
+        render_profile(row, PROFILE_DIR / profile_name(row))
 
 
 def grouped_rows(rows: list[dict[str, str]]) -> dict[str, dict[str, dict[str, str]]]:
@@ -147,7 +152,7 @@ def detail_rows(rows: list[dict[str, str]]) -> str:
             <td>{gbps:.2f}</td>
             <td>{float(row['rank0_tx_GBps']):.2f}</td>
             <td class="{ 'good' if vs >= 0 else 'bad' }">{pct(vs)}</td>
-            <td><a href="{profile_name(row)}">rank0</a></td>
+            <td><a href="{profile_href(row)}">rank0</a></td>
           </tr>"""
             )
     return "\n".join(chunks)
