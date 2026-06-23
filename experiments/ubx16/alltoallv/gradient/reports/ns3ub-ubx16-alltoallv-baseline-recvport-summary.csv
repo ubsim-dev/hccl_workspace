@@ -1,0 +1,2 @@
+scenario,max_over_avg,algorithm,case,tasks,total_bytes,pair_avg_bytes,pair_min_bytes,pair_max_bytes,pair_cv,src_cv,dst_cv,cross_fraction,makespan_us,global_GBps,rank0_makespan_us,rank0_GBps
+max1p0x,1.0,baseline-channel-recvport,experiments/ubx16/alltoallv/gradient/cases/generated_topology_ubx16_a2av_gradient_recvport_max1p0x_baseline-channel-recvport_128mb,816,2013265920,8388608.0,8388608,8388608,0.0,0.0,0.0,0.8,3808.42554,528.6347071393707,514.15952,244.72778409315455

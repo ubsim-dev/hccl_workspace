@@ -7,7 +7,9 @@ using the current HCCL Mesh1D baseline schedule:
 
   - each rank talks to up to ALLTOALLV_DIRECT_FULLMESH_CONCURRENT_SIZE peers per round
   - peers are selected symmetrically around the rank
-  - each rank-peer flow is one URMA_WRITE task
+  - by default each rank-peer flow is one URMA_WRITE task
+  - optional channel-split mode models the HCCL software channel split by
+    turning one rank-peer flow into one task per selected channel
 """
 
 from __future__ import annotations
@@ -102,6 +104,76 @@ def mesh1d_phase_count(rank_count: int, concurrent_limit: int) -> int:
     return (rank_count - 2 + concurrent) // concurrent
 
 
+def load_transport_channels_by_pair(
+    source_csv: Path,
+    rank_ids: set[int],
+    priority: int,
+) -> dict[tuple[int, int], list[dict[str, str]]]:
+    if not source_csv.exists():
+        raise FileNotFoundError(source_csv)
+    rows_by_pair: dict[tuple[int, int], list[dict[str, str]]] = {}
+    with source_csv.open(newline="") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None:
+            raise ValueError(f"{source_csv} has no header")
+        for row in reader:
+            if (
+                int(row["nodeId1"]) in rank_ids
+                and int(row["nodeId2"]) in rank_ids
+                and int(row["priority"]) == priority
+            ):
+                pair = (int(row["nodeId1"]), int(row["nodeId2"]))
+                rows_by_pair.setdefault(pair, []).append(row)
+    for rows in rows_by_pair.values():
+        rows.sort(
+            key=lambda row: (
+                int(row.get("metric", 0)),
+                int(row["portId1"]),
+                int(row["portId2"]),
+                int(row["tpn1"]),
+                int(row["tpn2"]),
+            )
+        )
+    return rows_by_pair
+
+
+def split_bytes_by_channels(total: int, channel_count: int) -> list[int]:
+    if channel_count <= 0:
+        raise ValueError("channel_count must be positive")
+    base = total // channel_count
+    chunks = [base for _ in range(channel_count)]
+    chunks[-1] += total - sum(chunks)
+    return chunks
+
+
+def lookup_channels(
+    channels_by_pair: dict[tuple[int, int], list[dict[str, str]]],
+    src: int,
+    dst: int,
+) -> list[dict[str, str]]:
+    rows = channels_by_pair.get((src, dst))
+    if rows is not None:
+        return rows
+    rows = channels_by_pair.get((dst, src))
+    if rows is not None:
+        return rows
+    return []
+
+
+def get_dst_port_for_channel(row: dict[str, str], src: int, dst: int) -> int:
+    node1 = int(row["nodeId1"])
+    node2 = int(row["nodeId2"])
+    if node1 == src and node2 == dst:
+        return int(row["portId2"])
+    if node2 == src and node1 == dst:
+        return int(row["portId1"])
+    if node1 == dst:
+        return int(row["portId1"])
+    if node2 == dst:
+        return int(row["portId2"])
+    raise ValueError(f"channel row does not match src/dst: {src}->{dst}, {row}")
+
+
 def write_traffic(
     output_path: Path,
     rank_ids: list[int],
@@ -110,6 +182,10 @@ def write_traffic(
     phase_delay: str,
     dependency_mode: str,
     concurrent_limit: int,
+    task_split_mode: str,
+    channels_by_pair: dict[tuple[int, int], list[dict[str, str]]] | None = None,
+    split_priority_base: int = 1,
+    recv_dependency_mode: str = "none",
 ) -> tuple[int, int, int, int]:
     rank_count = len(rank_ids)
     if rank_count < 2:
@@ -122,6 +198,7 @@ def write_traffic(
     task_id = 0
     phases: set[int] = set()
     last_task_by_unit: dict[tuple[int, int], int] = {}
+    last_task_by_recv_unit: dict[tuple[int, int], int] = {}
     with output_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=TRAFFIC_HEADER)
         writer.writeheader()
@@ -132,35 +209,69 @@ def write_traffic(
                     peer_offset_in_rank += len(mesh1d_phase_peers(alg_rank, rank_count, prev_phase, concurrent))
                 for peer_idx, peer_alg_rank in enumerate(mesh1d_phase_peers(alg_rank, rank_count, phase, concurrent)):
                     data_size = per_peer_base + int(peer_offset_in_rank + peer_idx < per_peer_remainder)
-                    if dependency_mode == "phase-barrier":
-                        phase_id = phase
-                        depend = "" if phase == 0 else str(phase - 1)
-                    elif dependency_mode == "thread-serial":
-                        phase_id = task_id
-                        unit = (alg_rank, peer_idx)
-                        previous = last_task_by_unit.get(unit)
-                        depend = "" if previous is None else str(previous)
-                        last_task_by_unit[unit] = task_id
-                    elif dependency_mode == "none":
-                        phase_id = 0
-                        depend = ""
+                    dst_node = rank_ids[peer_alg_rank]
+                    if task_split_mode == "flow":
+                        split_sizes = [data_size]
+                        split_channels: list[dict[str, str] | None] = [None]
+                    elif task_split_mode == "channel":
+                        if channels_by_pair is None:
+                            raise ValueError("channels_by_pair is required for channel split")
+                        channel_rows = lookup_channels(channels_by_pair, src_node, dst_node)
+                        if len(channel_rows) == 0:
+                            raise ValueError(f"no transport channel for pair {(src_node, dst_node)}")
+                        split_sizes = split_bytes_by_channels(data_size, len(channel_rows))
+                        split_channels = list(channel_rows)
                     else:
-                        raise ValueError(f"unknown dependency_mode {dependency_mode}")
-                    phases.add(phase_id)
-                    writer.writerow(
-                        {
-                            "taskId": task_id,
-                            "sourceNodeId": src_node,
-                            "destNodeId": rank_ids[peer_alg_rank],
-                            "dataSize(Byte)": data_size,
-                            "opType": "URMA_WRITE",
-                            "priority": priority,
-                            "delay": phase_delay,
-                            "phaseId": phase_id,
-                            "dependOnPhases": depend,
-                        }
-                    )
-                    task_id += 1
+                        raise ValueError(f"unknown task_split_mode {task_split_mode}")
+
+                    for channel_id, split_size in enumerate(split_sizes):
+                        if split_size <= 0:
+                            continue
+                        if dependency_mode == "phase-barrier":
+                            phase_id = phase
+                            depend = "" if phase == 0 else str(phase - 1)
+                        elif dependency_mode == "thread-serial":
+                            phase_id = task_id
+                            unit = (alg_rank, peer_idx, channel_id)
+                            previous = last_task_by_unit.get(unit)
+                            depend = "" if previous is None else str(previous)
+                            last_task_by_unit[unit] = task_id
+                        elif dependency_mode == "none":
+                            phase_id = 0
+                            depend = ""
+                        else:
+                            raise ValueError(f"unknown dependency_mode {dependency_mode}")
+                        if recv_dependency_mode != "none":
+                            if recv_dependency_mode == "dst-port":
+                                channel_row = split_channels[channel_id]
+                                if channel_row is None:
+                                    recv_key = (dst_node, -1)
+                                else:
+                                    recv_key = (dst_node, get_dst_port_for_channel(channel_row, src_node, dst_node))
+                            elif recv_dependency_mode == "dst-priority":
+                                recv_key = (dst_node, split_priority_base + channel_id)
+                            else:
+                                raise ValueError(f"unknown recv_dependency_mode {recv_dependency_mode}")
+                            previous_recv = last_task_by_recv_unit.get(recv_key)
+                            if previous_recv is not None:
+                                depend = str(previous_recv) if not depend else f"{depend} {previous_recv}"
+                            last_task_by_recv_unit[recv_key] = task_id
+                        task_priority = priority if task_split_mode == "flow" else split_priority_base + channel_id
+                        phases.add(phase_id)
+                        writer.writerow(
+                            {
+                                "taskId": task_id,
+                                "sourceNodeId": src_node,
+                                "destNodeId": dst_node,
+                                "dataSize(Byte)": split_size,
+                                "opType": "URMA_WRITE",
+                                "priority": task_priority,
+                                "delay": phase_delay,
+                                "phaseId": phase_id,
+                                "dependOnPhases": depend,
+                            }
+                        )
+                        task_id += 1
     return task_id, len(phases), per_peer_base, per_peer_base + int(per_peer_remainder > 0)
 
 
@@ -230,6 +341,33 @@ def filter_transport_channels(
     return len(rows_to_write)
 
 
+def write_channel_split_transport_channels(
+    source_csv: Path,
+    output_csv: Path,
+    rank_ids: set[int],
+    priority: int,
+    split_priority_base: int,
+) -> tuple[int, dict[tuple[int, int], list[dict[str, str]]]]:
+    rows_by_pair = load_transport_channels_by_pair(source_csv, rank_ids, priority)
+    rows_to_write: list[dict[str, str]] = []
+    with source_csv.open(newline="") as src_f:
+        reader = csv.DictReader(src_f)
+        if reader.fieldnames is None:
+            raise ValueError(f"{source_csv} has no header")
+        for pair in sorted(rows_by_pair):
+            for channel_id, row in enumerate(rows_by_pair[pair]):
+                out = dict(row)
+                out["priority"] = str(split_priority_base + channel_id)
+                rows_to_write.append(out)
+        with output_csv.open("w", newline="") as dst_f:
+            writer = csv.DictWriter(dst_f, fieldnames=reader.fieldnames)
+            writer.writeheader()
+            writer.writerows(rows_to_write)
+    if len(rows_to_write) == 0:
+        raise ValueError(f"no transport channels matched rank set and priority {priority}")
+    return len(rows_to_write), rows_by_pair
+
+
 def patch_network_attributes(path: Path, enable_port_trace: bool, disable_packet_trace: bool) -> None:
     lines = path.read_text().splitlines()
     patched: list[str] = []
@@ -278,6 +416,24 @@ def main() -> int:
         default="full",
         help="full keeps all transport channels for each pair; single keeps one TP per directed pair.",
     )
+    parser.add_argument(
+        "--task-split-mode",
+        choices=("flow", "channel"),
+        default="flow",
+        help="flow keeps one task per rank-peer flow; channel splits each rank-peer flow into one task per channel.",
+    )
+    parser.add_argument(
+        "--split-priority-base",
+        type=int,
+        default=1,
+        help="Base priority used by channel task split. Channel i uses base+i to bind one TP.",
+    )
+    parser.add_argument(
+        "--recv-dependency-mode",
+        choices=("none", "dst-port", "dst-priority"),
+        default="none",
+        help="Optional receiver-side exclusive dependency for ablation experiments.",
+    )
     parser.add_argument("--phase-delay", default="0ns")
     parser.add_argument(
         "--dependency-mode",
@@ -307,13 +463,23 @@ def main() -> int:
     output_case = output_case.resolve()
 
     copy_case_files(source_case, output_case)
-    tp_rows = filter_transport_channels(
-        source_case / "transport_channel.csv",
-        output_case / "transport_channel.csv",
-        set(rank_ids),
-        args.priority,
-        args.tp_mode,
-    )
+    channels_by_pair = None
+    if args.task_split_mode == "channel":
+        tp_rows, channels_by_pair = write_channel_split_transport_channels(
+            source_case / "transport_channel.csv",
+            output_case / "transport_channel.csv",
+            set(rank_ids),
+            args.priority,
+            args.split_priority_base,
+        )
+    else:
+        tp_rows = filter_transport_channels(
+            source_case / "transport_channel.csv",
+            output_case / "transport_channel.csv",
+            set(rank_ids),
+            args.priority,
+            args.tp_mode,
+        )
     task_count, phase_count, per_peer_min_bytes, per_peer_max_bytes = write_traffic(
         output_case / "traffic.csv",
         rank_ids,
@@ -322,6 +488,10 @@ def main() -> int:
         args.phase_delay,
         args.dependency_mode,
         args.concurrent,
+        args.task_split_mode,
+        channels_by_pair,
+        args.split_priority_base,
+        args.recv_dependency_mode,
     )
     patch_network_attributes(
         output_case / "network_attribute.txt",
@@ -337,6 +507,8 @@ def main() -> int:
     )
     print(
         f"dependency_mode={args.dependency_mode} tp_mode={args.tp_mode} "
+        f"task_split_mode={args.task_split_mode} "
+        f"recv_dependency_mode={args.recv_dependency_mode} "
         f"concurrent={args.concurrent} phases={phase_count} tasks={task_count} "
         f"transport_channel_rows={tp_rows}"
     )

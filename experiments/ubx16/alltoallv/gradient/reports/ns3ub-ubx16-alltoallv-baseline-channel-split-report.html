@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV Baseline Channel Split 对照</title>
+  <style>
+    :root { --bg:#f6f7f9; --panel:#fff; --text:#1f2937; --muted:#667085; --line:#d8dee8; --good:#087443; --bad:#b42318; --blue:#2563eb; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1160px, calc(100% - 36px)); margin:26px auto 48px; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:0; }
+    h2 { margin:0 0 12px; font-size:18px; letter-spacing:0; }
+    p { margin:8px 0; }
+    section, .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; }
+    .muted { color:var(--muted); }
+    .metrics { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .metric span { display:block; color:var(--muted); font-size:12px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; line-height:1.2; }
+    .layout { display:grid; gap:14px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; font-variant-numeric:tabular-nums; }
+    th, td { border-bottom:1px solid var(--line); padding:8px 7px; text-align:right; white-space:nowrap; }
+    th:first-child, td:first-child { text-align:left; }
+    th { color:var(--muted); font-size:12px; background:#fbfcfe; }
+    tr:last-child td { border-bottom:0; }
+    a { color:var(--blue); text-decoration:none; font-weight:650; }
+    a:hover { text-decoration:underline; }
+    code { background:#eef2f7; border-radius:5px; padding:1px 5px; }
+    .good { color:var(--good); }
+    .bad { color:var(--bad); }
+    ul { margin:8px 0 0 18px; padding:0; }
+    li { margin:5px 0; }
+    @media (max-width:900px) { .metrics { grid-template-columns:1fr; } table { font-size:12px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>UBX16 AllToAllV Baseline Channel Split 对照</h1>
+    <p class="muted">目的：验证 HCCL baseline 的软件 channel 分片，和 ns3ub 中“一条 task 绑定多 TP”的 full-TP 建模是否会导致明显带宽高估。实验使用 128MiB/rank AllToAllV gradient 分布，扫描 max/avg 1.0、1.2、1.5、2.0。</p>
+  </header>
+
+  <div class="metrics">
+    <div class="metric"><span>channel-split tasks</span><strong>816</strong><span>240 peer 流拆成 channel task</span></div>
+    <div class="metric"><span>full-TP tasks</span><strong>240</strong><span>每 peer 一条 task</span></div>
+    <div class="metric"><span>最大差异</span><strong>+0.65%</strong><span>channel-split vs full-TP</span></div>
+    <div class="metric"><span>2.0x channel-split</span><strong>203.77 GB/s</strong><span>单 rank 有效带宽</span></div>
+  </div>
+
+  <div class="layout">
+    <section>
+      <h2>结论</h2>
+      <ul>
+        <li>把 baseline 从 full-TP transport 自动分包改成 HCCL 风格 channel-split 后，带宽没有下降，反而高 0.28%-0.65%。这个差异很小，说明这组仿真里 baseline 偏高不是由 full-TP 建模单独造成的。</li>
+        <li>channel-split 建模方式：每个 src-dst peer 按 transport channel 数拆 task。UBX16 中 rank0 的 profile 有 51 条发送 task：3 条组内 mesh 单 channel，加 12 个跨组 peer 各 4 个 clos channel。</li>
+        <li>更可能缺失的是 HCCL buffer copy、HBM 竞争、stream/notify gap、真实调度开销，或者实际 profiling 所走的算子路径与当前 <code>/Users/caobo/workspace/hccl</code> baseline 不完全一致。</li>
+        <li>因此后续如果要压低仿真 baseline 到真实 profiling，应优先加软件/内存/stream gap 模型，而不是只改 TP 分包方式。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>带宽对照</h2>
+      <table>
+        <thead>
+          <tr><th>max/avg</th><th>pair CV</th><th>full-TP GB/s/rank</th><th>channel-split GB/s/rank</th><th>差异</th><th>MeshClos plane GB/s/rank</th><th>MeshClos vs channel</th><th>channel profile</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1.0x</td><td>0.000</td><td>238.69</td><td>240.24</td><td class="good">+0.65%</td><td>241.07</td><td class="good">+0.35%</td><td><a href="../profiles/ns3ub-ubx16-a2av-gradient-max1p0x-baseline-channel-rank0-profile.html">rank0</a></td></tr>
+          <tr><td>1.2x</td><td>0.114</td><td>230.44</td><td>231.53</td><td class="good">+0.47%</td><td>210.66</td><td class="bad">-9.01%</td><td>-</td></tr>
+          <tr><td>1.5x</td><td>0.279</td><td>218.99</td><td>219.92</td><td class="good">+0.43%</td><td>178.07</td><td class="bad">-19.03%</td><td>-</td></tr>
+          <tr><td>2.0x</td><td>0.540</td><td>203.20</td><td>203.77</td><td class="good">+0.28%</td><td>143.03</td><td class="bad">-29.81%</td><td><a href="../profiles/ns3ub-ubx16-a2av-gradient-max2p0x-baseline-channel-rank0-profile.html">rank0</a></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Case 与数据</h2>
+      <ul>
+        <li>channel-split summary：<code>experiments/ubx16/alltoallv/gradient/reports/ns3ub-ubx16-alltoallv-baseline-channel-only-summary.csv</code></li>
+        <li>channel-split case 前缀：<code>experiments/ubx16/alltoallv/gradient/cases/generated_topology_ubx16_a2av_gradient_channelsplit_*</code></li>
+        <li>生成器改动：<code>tools/generate_hccl_mesh1d_alltoallv_case.py --task-split-mode channel</code>。channel i 使用 priority <code>1+i</code> 绑定单 TP，避免一条 split task 再次走多 TP。</li>
+      </ul>
+    </section>
+  </div>
+</main>
+</body>
+</html>

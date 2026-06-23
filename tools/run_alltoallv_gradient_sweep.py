@@ -161,6 +161,50 @@ def generate_algorithm_case(
             "--concurrent",
             "16",
         ]
+    elif algorithm == "baseline-channel":
+        cmd = [
+            "python3",
+            "tools/generate_hccl_mesh1d_alltoallv_case.py",
+            "--source-case",
+            str(UBX16_SOURCE_CASE),
+            "--output-case",
+            str(output_case),
+            "--rank-count",
+            str(RANK_COUNT),
+            "--per-rank-bytes",
+            size_arg,
+            "--dependency-mode",
+            "thread-serial",
+            "--tp-mode",
+            "full",
+            "--task-split-mode",
+            "channel",
+            "--concurrent",
+            "16",
+        ]
+    elif algorithm == "baseline-channel-recvport":
+        cmd = [
+            "python3",
+            "tools/generate_hccl_mesh1d_alltoallv_case.py",
+            "--source-case",
+            str(UBX16_SOURCE_CASE),
+            "--output-case",
+            str(output_case),
+            "--rank-count",
+            str(RANK_COUNT),
+            "--per-rank-bytes",
+            size_arg,
+            "--dependency-mode",
+            "thread-serial",
+            "--tp-mode",
+            "full",
+            "--task-split-mode",
+            "channel",
+            "--recv-dependency-mode",
+            "dst-port",
+            "--concurrent",
+            "16",
+        ]
     elif algorithm == "matrix":
         cmd = [
             "python3",
@@ -212,13 +256,19 @@ def patch_traffic(case_dir: Path, sizes: dict[tuple[int, int], int]) -> None:
         fieldnames = reader.fieldnames
     if fieldnames is None:
         raise ValueError(f"{path} has no header")
-    seen: set[tuple[int, int]] = set()
+    rows_by_pair: dict[tuple[int, int], list[dict[str, str]]] = {}
     for row in rows:
         key = (int(row["sourceNodeId"]), int(row["destNodeId"]))
-        row["dataSize(Byte)"] = str(sizes[key])
-        seen.add(key)
-    if seen != set(sizes):
+        rows_by_pair.setdefault(key, []).append(row)
+    if set(rows_by_pair) != set(sizes):
         raise ValueError(f"traffic pair mismatch for {case_dir}")
+    for key, pair_rows in rows_by_pair.items():
+        total = sizes[key]
+        base = total // len(pair_rows)
+        chunks = [base for _ in pair_rows]
+        chunks[-1] += total - sum(chunks)
+        for row, chunk in zip(pair_rows, chunks):
+            row["dataSize(Byte)"] = str(chunk)
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

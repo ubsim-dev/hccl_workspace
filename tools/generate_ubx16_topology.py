@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Generate a 16-rank UBX-like ns-3-ub base topology.
+"""Generate UBX-like ns-3-ub base topologies.
 
 Topology:
-  - 16 ranks, grouped as 4 ranks per mesh group.
-  - Each rank has 3 direct in-group mesh links.
-  - Each rank has 4 clos links, one to each plane switch.
-  - Switches 16..19 represent the 4 clos planes.
+  - Ranks are grouped by --group-size.
+  - Optional direct in-group mesh links.
+  - Each rank has one link to every switch plane.
+  - Switches start after the rank node IDs.
 
 The generated shortest-path routing yields:
-  - in-group rank pairs: one direct mesh TP.
-  - cross-group rank pairs: four switch-plane TPs.
+  - with mesh enabled, in-group rank pairs use direct mesh TPs.
+  - all other rank pairs use switch-plane TPs.
 """
 
 from __future__ import annotations
@@ -94,6 +94,7 @@ def build_topology(
     bandwidth: str,
     mesh_delay: str,
     clos_delay: str,
+    mesh_enabled: bool,
 ) -> netsim.NetworkSimulationGraph:
     if rank_count % group_size != 0:
         raise ValueError("rank-count must be divisible by group-size")
@@ -107,11 +108,12 @@ def build_topology(
         graph.add_netisim_node(first_switch + plane, forward_delay="1ns")
 
     # Add mesh links first so host ports 0..group_size-2 are in-group links.
-    for group_base in range(0, rank_count, group_size):
-        group_ranks = list(range(group_base, group_base + group_size))
-        for i, src in enumerate(group_ranks):
-            for dst in group_ranks[i + 1 :]:
-                graph.add_netisim_edge(src, dst, bandwidth=bandwidth, delay=mesh_delay, edge_count=1)
+    if mesh_enabled:
+        for group_base in range(0, rank_count, group_size):
+            group_ranks = list(range(group_base, group_base + group_size))
+            for i, src in enumerate(group_ranks):
+                for dst in group_ranks[i + 1 :]:
+                    graph.add_netisim_edge(src, dst, bandwidth=bandwidth, delay=mesh_delay, edge_count=1)
 
     # Then add one clos uplink per plane.
     for rank in range(rank_count):
@@ -141,6 +143,7 @@ def main() -> int:
     parser.add_argument("--bandwidth", default="400Gbps")
     parser.add_argument("--mesh-delay", default="1ns")
     parser.add_argument("--clos-delay", default="1ns")
+    parser.add_argument("--no-mesh", action="store_true", help="Do not add direct in-group mesh links.")
     parser.add_argument("--priority", type=int, nargs="+", default=[7])
     parser.add_argument("--network-attribute", type=Path, default=DEFAULT_NETWORK_ATTR)
     parser.add_argument("--port-trace", dest="port_trace", action="store_true", help="Enable port-level trace output.")
@@ -157,6 +160,7 @@ def main() -> int:
         bandwidth=args.bandwidth,
         mesh_delay=args.mesh_delay,
         clos_delay=args.clos_delay,
+        mesh_enabled=not args.no_mesh,
     )
     graph.output_dir = str(output_case)
     graph.build_graph_config()
@@ -174,7 +178,7 @@ def main() -> int:
     print(f"output_case={output_case}")
     print(
         f"ranks={args.rank_count} group_size={args.group_size} "
-        f"planes={args.plane_count} bandwidth={args.bandwidth}"
+        f"planes={args.plane_count} bandwidth={args.bandwidth} mesh={not args.no_mesh}"
     )
     return 0
 

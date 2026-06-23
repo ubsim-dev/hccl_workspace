@@ -32,7 +32,9 @@ def load_unit_indices(case_dir: Path, rank: int, priority: int, concurrent: int 
     task_rows: list[dict[str, str]] = []
     with (case_dir / "traffic.csv").open(newline="") as f:
         for row in csv.DictReader(f):
-            if int(row["priority"]) != priority or int(row["sourceNodeId"]) != rank:
+            if priority >= 0 and int(row["priority"]) != priority:
+                continue
+            if int(row["sourceNodeId"]) != rank:
                 continue
             task_rows.append(row)
 
@@ -55,7 +57,9 @@ def load_rank_tasks(case_dir: Path, rank: int, priority: int, concurrent: int | 
     tasks: list[Task] = []
     with (case_dir / "output" / "task_statistics.csv").open(newline="") as f:
         for row in csv.DictReader(f):
-            if int(row["priority"]) != priority or int(row["sourceNodeId"]) != rank:
+            if priority >= 0 and int(row["priority"]) != priority:
+                continue
+            if int(row["sourceNodeId"]) != rank:
                 continue
             task_id = int(row["taskId"])
             tasks.append(
@@ -230,7 +234,7 @@ def main() -> int:
     parser.add_argument("case_dir", type=Path)
     parser.add_argument("-o", "--output", type=Path, required=True)
     parser.add_argument("--rank", type=int, required=True)
-    parser.add_argument("--priority", type=int, default=7)
+    parser.add_argument("--priority", type=int, default=7, help="Traffic priority to render; use -1 to include all priorities.")
     parser.add_argument("--concurrent", type=int, help="Logical Mesh1D slots per round. Inferred from traffic.csv when omitted.")
     parser.add_argument("--title", default="Mesh1D rank profile")
     args = parser.parse_args()
