@@ -15,3 +15,5 @@
 - `notes/`：算法和建模说明。
 
 入口文档：`notes/ns3ub-ubx16-alltoall-algorithms-summary.zh-CN.md`。
+
+Profiling 图生成脚本说明见 `../profiling.md`。

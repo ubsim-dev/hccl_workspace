@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UBX16 AllToAllV snake skew baseline fullTP rank0 profile</title>
+  <style>
+    body { margin: 0; background: #f6f7f9; color: #1f2937; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(1220px, calc(100% - 32px)); margin: 24px auto 42px; }
+    h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: 0; }
+    .muted { color: #667085; margin: 0 0 16px; }
+    .panel { background: white; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; overflow-x: auto; }
+    svg { min-width: 1180px; }
+    .grid { stroke: #e4e8ef; stroke-width: 1; }
+    .tick, .row-meta { fill: #667085; font-size: 12px; }
+    .row-label { fill: #1f2937; font-size: 13px; font-weight: 650; }
+    .row-bg { fill: #fbfcfe; }
+    .bar { stroke: rgba(31,41,55,.25); stroke-width: .6; }
+    .task { cursor: pointer; outline: none; }
+    .task:focus .bar, .task.selected .bar { stroke: #111827; stroke-width: 1.8; opacity: 1; }
+    .phase0 { fill: #2563eb; }
+    .phase1 { fill: #0f766e; }
+    .phase2 { fill: #b42318; }
+    .phase3 { fill: #7c3aed; }
+    .bar-label { fill: white; font-size: 11px; pointer-events: none; }
+    .details { margin-top: 12px; background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; }
+    .details h2 { margin: 0 0 10px; font-size: 16px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .detail-item { background: #fbfcfe; border: 1px solid #edf1f6; border-radius: 6px; padding: 8px 10px; }
+    .detail-label { color: #667085; font-size: 12px; }
+    .detail-value { color: #111827; font-weight: 650; font-variant-numeric: tabular-nums; }
+    code { background: #eef2f7; padding: 1px 5px; border-radius: 5px; }
+    @media (max-width: 760px) { .detail-grid { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>UBX16 AllToAllV snake skew baseline fullTP rank0 profile</h1>
+  <p class="muted">case: <code>experiments/ubx16/alltoallv/snake/cases/generated_topology_ubx16_a2av_snake_skew_baseline_fulltp_custom</code> | rank 0 | tasks 15 | makespan 124.280us | direct 182.59 GB/s</p>
+  <div class="panel">
+    <svg width="1180" height="424" role="img" aria-label="Mesh1D rank profile">
+      <line class="grid" x1="176.00" y1="58" x2="176.00" y2="376" /><text class="tick" x="176.00" y="50" text-anchor="middle">0.0us</text><line class="grid" x1="298.00" y1="58" x2="298.00" y2="376" /><text class="tick" x="298.00" y="50" text-anchor="middle">15.5us</text><line class="grid" x1="420.00" y1="58" x2="420.00" y2="376" /><text class="tick" x="420.00" y="50" text-anchor="middle">31.1us</text><line class="grid" x1="542.00" y1="58" x2="542.00" y2="376" /><text class="tick" x="542.00" y="50" text-anchor="middle">46.6us</text><line class="grid" x1="664.00" y1="58" x2="664.00" y2="376" /><text class="tick" x="664.00" y="50" text-anchor="middle">62.1us</text><line class="grid" x1="786.00" y1="58" x2="786.00" y2="376" /><text class="tick" x="786.00" y="50" text-anchor="middle">77.7us</text><line class="grid" x1="908.00" y1="58" x2="908.00" y2="376" /><text class="tick" x="908.00" y="50" text-anchor="middle">93.2us</text><line class="grid" x1="1030.00" y1="58" x2="1030.00" y2="376" /><text class="tick" x="1030.00" y="50" text-anchor="middle">108.7us</text><line class="grid" x1="1152.00" y1="58" x2="1152.00" y2="376" /><text class="tick" x="1152.00" y="50" text-anchor="middle">124.3us</text>
+      <rect class="row-bg" x="0" y="83.00" width="1180" height="30.00" /><text class="row-label" x="16" y="102.00">mesh1d-thread[0]</text><text class="row-meta" x="130" y="102.00">3 task</text><g class="task" tabindex="0" data-task-id="0" data-flow="0->1" data-slot="mesh1d-thread[0]" data-phase="0" data-start="0.000000 us" data-end="24.634500 us" data-duration="24.634500 us" data-size="1188068 B" data-throughput="385.822 Gbps / 48.228 GB/s"><title>task 0 0-&gt;1 phase 0\n0.000us - 24.634us\n1188068 B, 385.8 Gbps</title><rect class="bar phase0" x="176.00" y="91.00" width="193.46" height="18" rx="3" /><text class="bar-label" x="181.00" y="104.00">0: 0-&gt;1</text></g><g class="task" tabindex="0" data-task-id="7" data-flow="0->8" data-slot="mesh1d-thread[0]" data-phase="7" data-start="27.920980 us" data-end="96.218300 us" data-duration="68.297320 us" data-size="1684639 B" data-throughput="197.330 Gbps / 24.666 GB/s"><title>task 7 0-&gt;8 phase 7\n27.921us - 96.218us\n1684639 B, 197.3 Gbps</title><rect class="bar phase3" x="395.27" y="91.00" width="536.35" height="18" rx="3" /><text class="bar-label" x="400.27" y="104.00">7: 0-&gt;8</text></g><g class="task" tabindex="0" data-task-id="14" data-flow="0->15" data-slot="mesh1d-thread[0]" data-phase="14" data-start="64.196860 us" data-end="90.623940 us" data-duration="26.427080 us" data-size="1237529 B" data-throughput="374.625 Gbps / 46.828 GB/s"><title>task 14 0-&gt;15 phase 14\n64.197us - 90.624us\n1237529 B, 374.6 Gbps</title><rect class="bar phase2" x="680.15" y="91.00" width="207.54" height="18" rx="3" /><text class="bar-label" x="685.15" y="104.00">14: 0-&gt;15</text></g><rect class="row-bg" x="0" y="121.00" width="1180" height="30.00" /><text class="row-label" x="16" y="140.00">mesh1d-thread[1]</text><text class="row-meta" x="130" y="140.00">2 task</text><g class="task" tabindex="0" data-task-id="1" data-flow="0->2" data-slot="mesh1d-thread[1]" data-phase="1" data-start="0.000000 us" data-end="28.420240 us" data-duration="28.420240 us" data-size="1373576 B" data-throughput="386.647 Gbps / 48.331 GB/s"><title>task 1 0-&gt;2 phase 1\n0.000us - 28.420us\n1373576 B, 386.6 Gbps</title><rect class="bar phase1" x="176.00" y="129.00" width="223.19" height="18" rx="3" /><text class="bar-label" x="181.00" y="142.00">1: 0-&gt;2</text></g><g class="task" tabindex="0" data-task-id="8" data-flow="0->9" data-slot="mesh1d-thread[1]" data-phase="8" data-start="26.874340 us" data-end="88.395980 us" data-duration="61.521640 us" data-size="1890773 B" data-throughput="245.868 Gbps / 30.733 GB/s"><title>task 8 0-&gt;9 phase 8\n26.874us - 88.396us\n1890773 B, 245.9 Gbps</title><rect class="bar phase0" x="387.05" y="129.00" width="483.14" height="18" rx="3" /><text class="bar-label" x="392.05" y="142.00">8: 0-&gt;9</text></g><rect class="row-bg" x="0" y="159.00" width="1180" height="30.00" /><text class="row-label" x="16" y="178.00">mesh1d-thread[2]</text><text class="row-meta" x="130" y="178.00">2 task</text><g class="task" tabindex="0" data-task-id="2" data-flow="0->3" data-slot="mesh1d-thread[2]" data-phase="2" data-start="0.000000 us" data-end="42.280360 us" data-duration="42.280360 us" data-size="2052856 B" data-throughput="388.427 Gbps / 48.553 GB/s"><title>task 2 0-&gt;3 phase 2\n0.000us - 42.280us\n2052856 B, 388.4 Gbps</title><rect class="bar phase2" x="176.00" y="167.00" width="332.04" height="18" rx="3" /><text class="bar-label" x="181.00" y="180.00">2: 0-&gt;3</text></g><g class="task" tabindex="0" data-task-id="9" data-flow="0->10" data-slot="mesh1d-thread[2]" data-phase="9" data-start="38.015680 us" data-end="92.231520 us" data-duration="54.215840 us" data-size="2097152 B" data-throughput="309.452 Gbps / 38.682 GB/s"><title>task 9 0-&gt;10 phase 9\n38.016us - 92.232us\n2097152 B, 309.5 Gbps</title><rect class="bar phase1" x="474.55" y="167.00" width="425.77" height="18" rx="3" /><text class="bar-label" x="479.55" y="180.00">9: 0-&gt;10</text></g><rect class="row-bg" x="0" y="197.00" width="1180" height="30.00" /><text class="row-label" x="16" y="216.00">mesh1d-thread[3]</text><text class="row-meta" x="130" y="216.00">2 task</text><g class="task" tabindex="0" data-task-id="3" data-flow="0->4" data-slot="mesh1d-thread[3]" data-phase="3" data-start="0.000000 us" data-end="27.920980 us" data-duration="27.920980 us" data-size="1171987 B" data-throughput="335.801 Gbps / 41.975 GB/s"><title>task 3 0-&gt;4 phase 3\n0.000us - 27.921us\n1171987 B, 335.8 Gbps</title><rect class="bar phase3" x="176.00" y="205.00" width="219.27" height="18" rx="3" /><text class="bar-label" x="181.00" y="218.00">3: 0-&gt;4</text></g><g class="task" tabindex="0" data-task-id="10" data-flow="0->11" data-slot="mesh1d-thread[3]" data-phase="10" data-start="23.805920 us" data-end="64.196860 us" data-duration="40.390940 us" data-size="1543604 B" data-throughput="305.733 Gbps / 38.217 GB/s"><title>task 10 0-&gt;11 phase 10\n23.806us - 64.197us\n1543604 B, 305.7 Gbps</title><rect class="bar phase2" x="362.95" y="205.00" width="317.20" height="18" rx="3" /><text class="bar-label" x="367.95" y="218.00">10: 0-&gt;11</text></g><rect class="row-bg" x="0" y="235.00" width="1180" height="30.00" /><text class="row-label" x="16" y="254.00">mesh1d-thread[4]</text><text class="row-meta" x="130" y="254.00">2 task</text><g class="task" tabindex="0" data-task-id="4" data-flow="0->5" data-slot="mesh1d-thread[4]" data-phase="4" data-start="0.000000 us" data-end="26.874340 us" data-duration="26.874340 us" data-size="1090135 B" data-throughput="324.513 Gbps / 40.564 GB/s"><title>task 4 0-&gt;5 phase 4\n0.000us - 26.874us\n1090135 B, 324.5 Gbps</title><rect class="bar phase0" x="176.00" y="243.00" width="211.05" height="18" rx="3" /><text class="bar-label" x="181.00" y="256.00">4: 0-&gt;5</text></g><g class="task" tabindex="0" data-task-id="11" data-flow="0->12" data-slot="mesh1d-thread[4]" data-phase="11" data-start="96.218300 us" data-end="114.923620 us" data-duration="18.705320 us" data-size="1264930 B" data-throughput="540.993 Gbps / 67.624 GB/s"><title>task 11 0-&gt;12 phase 11\n96.218us - 114.924us\n1264930 B, 541.0 Gbps</title><rect class="bar phase3" x="931.62" y="243.00" width="146.90" height="18" rx="3" /><text class="bar-label" x="936.62" y="256.00">11: 0-&gt;12</text></g><rect class="row-bg" x="0" y="273.00" width="1180" height="30.00" /><text class="row-label" x="16" y="292.00">mesh1d-thread[5]</text><text class="row-meta" x="130" y="292.00">2 task</text><g class="task" tabindex="0" data-task-id="5" data-flow="0->6" data-slot="mesh1d-thread[5]" data-phase="5" data-start="0.000000 us" data-end="38.015680 us" data-duration="38.015680 us" data-size="1655440 B" data-throughput="348.370 Gbps / 43.546 GB/s"><title>task 5 0-&gt;6 phase 5\n0.000us - 38.016us\n1655440 B, 348.4 Gbps</title><rect class="bar phase1" x="176.00" y="281.00" width="298.55" height="18" rx="3" /><text class="bar-label" x="181.00" y="294.00">5: 0-&gt;6</text></g><g class="task" tabindex="0" data-task-id="12" data-flow="0->13" data-slot="mesh1d-thread[5]" data-phase="12" data-start="88.395980 us" data-end="124.280420 us" data-duration="35.884440 us" data-size="1879170 B" data-throughput="418.938 Gbps / 52.367 GB/s"><title>task 12 0-&gt;13 phase 12\n88.396us - 124.280us\n1879170 B, 418.9 Gbps</title><rect class="bar phase0" x="870.19" y="281.00" width="281.81" height="18" rx="3" /><text class="bar-label" x="875.19" y="294.00">12: 0-&gt;13</text></g><rect class="row-bg" x="0" y="311.00" width="1180" height="30.00" /><text class="row-label" x="16" y="330.00">mesh1d-thread[6]</text><text class="row-meta" x="130" y="330.00">2 task</text><g class="task" tabindex="0" data-task-id="6" data-flow="0->7" data-slot="mesh1d-thread[6]" data-phase="6" data-start="0.000000 us" data-end="23.805920 us" data-duration="23.805920 us" data-size="1048576 B" data-throughput="352.375 Gbps / 44.047 GB/s"><title>task 6 0-&gt;7 phase 6\n0.000us - 23.806us\n1048576 B, 352.4 Gbps</title><rect class="bar phase2" x="176.00" y="319.00" width="186.95" height="18" rx="3" /><text class="bar-label" x="181.00" y="332.00">6: 0-&gt;7</text></g><g class="task" tabindex="0" data-task-id="13" data-flow="0->14" data-slot="mesh1d-thread[6]" data-phase="13" data-start="92.231520 us" data-end="115.958840 us" data-duration="23.727320 us" data-size="1513993 B" data-throughput="510.464 Gbps / 63.808 GB/s"><title>task 13 0-&gt;14 phase 13\n92.232us - 115.959us\n1513993 B, 510.5 Gbps</title><rect class="bar phase1" x="900.31" y="319.00" width="186.34" height="18" rx="3" /><text class="bar-label" x="905.31" y="332.00">13: 0-&gt;14</text></g>
+    </svg>
+  </div>
+  <section class="details" aria-live="polite">
+    <h2>Task detail</h2>
+    <div class="detail-grid" id="detail-grid">
+      <div class="detail-item"><div class="detail-label">选择</div><div class="detail-value">点击上方任意条形流</div></div>
+    </div>
+  </section>
+</main>
+<script>
+  const detailGrid = document.getElementById('detail-grid');
+  const fields = [
+    ['taskId', 'Task'],
+    ['flow', 'Flow'],
+    ['slot', 'Slot'],
+    ['phase', 'Phase'],
+    ['start', 'Start'],
+    ['end', 'End'],
+    ['duration', 'Duration'],
+    ['size', 'Data'],
+    ['throughput', 'Throughput'],
+  ];
+  function selectTask(node) {
+    document.querySelectorAll('.task.selected').forEach((el) => el.classList.remove('selected'));
+    node.classList.add('selected');
+    detailGrid.innerHTML = fields.map(([key, label]) => {
+      const value = node.dataset[key] || '-';
+      return `<div class="detail-item"><div class="detail-label">${label}</div><div class="detail-value">${value}</div></div>`;
+    }).join('');
+  }
+  document.querySelectorAll('.task').forEach((node) => {
+    node.addEventListener('click', () => selectTask(node));
+    node.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectTask(node);
+      }
+    });
+  });
+</script>
+</body>
+</html>

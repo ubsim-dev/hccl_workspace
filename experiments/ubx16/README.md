@@ -8,3 +8,5 @@ UBX16 拓扑：16 rank，每 4 rank 一个 mesh 组；每张卡有 3 条组内 m
 | `alltoallv` | AllToAllV 场景化实验和随机扫描。 |
 
 基础拓扑在 `../topologies/ubx16/generated_topology_ubx16`。
+
+Profiling 图生成脚本说明见 `profiling.md`。

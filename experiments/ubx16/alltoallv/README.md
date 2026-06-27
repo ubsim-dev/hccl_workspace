@@ -15,3 +15,5 @@ AllToAllV 实验按场景组织：
 - `mild-random-sweep/reports/ns3ub-ubx16-alltoallv-mild-random-sweep.html`
 - `gradient/reports/ns3ub-ubx16-alltoallv-gradient-report.html`
 - `distribution/reports/ns3ub-ubx16-alltoallv-distribution-report.html`
+
+Profiling 图生成脚本说明见 `../profiling.md`。

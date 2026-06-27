@@ -1,0 +1,6 @@
+metric,value
+tasks,240
+total_bytes,2147483648
+makespan_us,663.705380
+global_payload_GBps,3235.597771
+global_payload_Gbps,25884.782166

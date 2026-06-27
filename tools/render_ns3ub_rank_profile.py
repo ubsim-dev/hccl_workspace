@@ -108,17 +108,25 @@ def load_rank_tasks(
     priorities: set[int],
     unit_mode: str,
 ) -> list[Task]:
+    def field(row: dict[str, str], *names: str) -> str:
+        for name in names:
+            if name in row:
+                return row[name]
+        raise KeyError(names[0])
+
     tasks: list[Task] = []
     with (case_dir / "output" / "task_statistics.csv").open(newline="") as f:
         for row in csv.DictReader(f):
             if int(row["priority"]) not in priorities:
                 continue
-            src = int(row["sourceNodeId"])
+            src = int(field(row, "sourceNodeId", "sourceNode"))
             if src != rank:
                 continue
-            dst = int(row["destNodeId"])
+            dst = int(field(row, "destNodeId", "destNode"))
             priority = int(row["priority"])
-            if (
+            if unit_mode == "peer-thread":
+                unit_kind, unit_idx = "peer", dst
+            elif (
                 unit_mode == "priority-plane"
                 and src // group_size != dst // group_size
                 and priority != 7
@@ -178,8 +186,11 @@ def render_html(
     for task in tasks:
         lanes[(task.unit_kind, task.unit_idx)].append(task)
 
-    lane_order = [("mesh", idx) for idx in range(group_size - 1)]
-    lane_order.extend(("clos", idx) for idx in range(clos_channels))
+    if any(kind == "peer" for kind, _ in lanes):
+        lane_order = sorted(lanes)
+    else:
+        lane_order = [("mesh", idx) for idx in range(group_size - 1)]
+        lane_order.extend(("clos", idx) for idx in range(clos_channels))
     lane_order = [lane for lane in lane_order if lane in lanes]
 
     left = 172
@@ -428,9 +439,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--unit-mode",
-        choices=("logical", "priority-plane"),
+        choices=("logical", "priority-plane", "peer-thread"),
         default="logical",
-        help="logical uses MeshClosV3 logical thread mapping; priority-plane maps cross-rank priority 3/4/5/6 to clos-thread[0..3].",
+        help=(
+            "logical uses MeshClosV3 logical thread mapping; priority-plane maps cross-rank "
+            "priority 3/4/5/6 to clos-thread[0..3]; peer-thread renders one row per destination rank."
+        ),
     )
     parser.add_argument(
         "--sublane-epsilon-us",
